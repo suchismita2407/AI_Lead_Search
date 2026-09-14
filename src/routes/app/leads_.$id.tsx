@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { getLead } from "~/lib/leads";
 import { formatCurrency, scoreToBand } from "~/lib/scoring";
 
-export const Route = createFileRoute("/app/leads/$id")({
+export const Route = createFileRoute("/app/leads_/$id")({
   loader: async ({ params }) =>
     getLead({ data: { id: Number(params.id) } }),
   component: LeadDetailPage,
