@@ -14,6 +14,16 @@ import {
   type ScoringResult,
 } from "./scoring.server";
 import { scoreToBand, type LeadBand, type SignalBreakdownItem } from "./scoring";
+import {
+  getConversationSnapshot,
+  getAppointmentForLead,
+  type ConversationSnapshot,
+  type AppointmentSnapshot,
+} from "./conversations.server";
+import {
+  getQualificationForLead,
+  type QualificationRecord,
+} from "./qualification.server";
 
 export interface LeadListItem {
   id: number;
@@ -33,6 +43,12 @@ export interface LeadListItem {
 
 export interface LeadDetail extends LeadListItem {
   signals: SignalBreakdownItem[];
+  /** AI seller conversation thread + whether replies are simulated. */
+  conversation: ConversationSnapshot;
+  /** Seller qualification from the conversation, once it exists. */
+  qualification: QualificationRecord | null;
+  /** Booked call, once the investor schedules one. */
+  appointment: AppointmentSnapshot | null;
 }
 
 export interface ImportLeadsResult {
@@ -97,7 +113,18 @@ export async function getLeadForUser(id: number): Promise<LeadDetail | null> {
       signals = [];
     }
   }
-  return { ...toLeadListItem(row), signals };
+  const [conversation, qualification, appointment] = await Promise.all([
+    getConversationSnapshot(Number(row.id), user.id),
+    getQualificationForLead(Number(row.id), user.id),
+    getAppointmentForLead(Number(row.id), user.id),
+  ]);
+  return {
+    ...toLeadListItem(row),
+    signals,
+    conversation,
+    qualification,
+    appointment,
+  };
 }
 
 const normKey = (s: string | null): string =>

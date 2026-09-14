@@ -172,6 +172,7 @@ const MIGRATIONS: string[] = [
 function runMigrations(database: Database): void {
   for (const ddl of MIGRATIONS) database.exec(ddl);
   ensureLeadColumns(database);
+  ensureQualificationColumns(database);
   seedDemoUser(database);
 }
 
@@ -192,6 +193,24 @@ function ensureLeadColumns(database: Database): void {
   }
   if (!names.has("signals_json")) {
     database.exec("ALTER TABLE leads ADD COLUMN signals_json TEXT");
+  }
+}
+
+/**
+ * Idempotent column backfills for the `qualification` table (milestone 3
+ * adds the AI-written summary + updated_at to the milestone-2 table — ALTER
+ * TABLE if and only if the column is missing).
+ */
+function ensureQualificationColumns(database: Database): void {
+  const columns = database
+    .query("PRAGMA table_info(qualification)")
+    .all() as Array<{ name: string }>;
+  const names = new Set(columns.map((c) => c.name));
+  if (!names.has("summary")) {
+    database.exec("ALTER TABLE qualification ADD COLUMN summary TEXT");
+  }
+  if (!names.has("updated_at")) {
+    database.exec("ALTER TABLE qualification ADD COLUMN updated_at TEXT");
   }
 }
 

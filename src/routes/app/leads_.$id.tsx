@@ -1,7 +1,22 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { getLead } from "~/lib/leads";
-import { formatCurrency, scoreToBand } from "~/lib/scoring";
+import {
+  bookAppointment,
+  sendSellerMessage,
+  startConversation,
+} from "~/lib/conversations";
+import type {
+  AppointmentSnapshot,
+  ConversationMessage,
+  QualificationRecord,
+} from "~/lib/conversations";
+import {
+  formatCurrency,
+  qualificationBand,
+  QUALIFICATION_DIMS,
+  scoreToBand,
+} from "~/lib/scoring";
 
 export const Route = createFileRoute("/app/leads_/$id")({
   loader: async ({ params }) =>
@@ -24,6 +39,15 @@ const bandText: Record<string, string> = {
   LOW: "text-gray-500 dark:text-gray-400",
 };
 
+const statusBadge: Record<string, string> = {
+  new: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  contacted:
+    "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400",
+  qualified:
+    "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400",
+  booked: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400",
+};
+
 function Fact({
   label,
   value,
@@ -43,8 +67,44 @@ function Fact({
   );
 }
 
+/** Human-friendly timestamp like "Sep 14, 2:41 PM". */
+function formatTime(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso.replace(" ", "T") + (iso.includes("Z") ? "" : "Z"));
+  if (Number.isNaN(d.getTime())) return iso.slice(11, 16) || "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+type LeadDetailData = NonNullable<Awaited<ReturnType<typeof getLead>>>;
+
 function LeadDetailPage() {
-  const lead = Route.useLoaderData();
+  const router = useRouter();
+  const initial = Route.useLoaderData();
+  const [lead, setLead] = useState<LeadDetailData>(initial!);
+  const [messages, setMessages] = useState<ConversationMessage[]>(
+    initial?.conversation.messages ?? [],
+  );
+  const [simulated, setSimulated] = useState<boolean>(
+    initial?.conversation.simulated ?? false,
+  );
+  const [qualification, setQualification] = useState<QualificationRecord | null>(
+    initial?.qualification ?? null,
+  );
+  const [appointment, setAppointment] = useState<AppointmentSnapshot | null>(
+    initial?.appointment ?? null,
+  );
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const [bookDate, setBookDate] = useState("");
+  const [bookTime, setBookTime] = useState("");
+  const [booking, setBooking] = useState(false);
+  const [bookError, setBookError] = useState<string | null>(null);
 
   if (!lead) {
     return (
@@ -68,6 +128,89 @@ function LeadDetailPage() {
       .filter(Boolean)
       .join(", ") || "—";
   const createdDate = lead.created_at.slice(0, 10) || "—";
+  const leadId = Number(lead.id);
+  const hasThread = messages.length > 0;
+
+  async function handleStart() {
+    if (sending || hasThread) return;
+    setSending(true);
+    setThreadError(null);
+    try {
+      const res = await startConversation({ data: { leadId } });
+      if (!res) {
+        setThreadError("Couldn't start this conversation.");
+      } else if ("error" in res) {
+        setThreadError(res.error);
+      } else {
+        setMessages(res.messages);
+        setSimulated(res.simulated);
+        setLead((prev) => (prev ? { ...prev, status: "contacted" } : prev));
+      }
+    } catch {
+      setThreadError("Something went wrong. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleSend(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || sending) return;
+    setSending(true);
+    setThreadError(null);
+    try {
+      const res = await sendSellerMessage({ data: { leadId, message: text } });
+      if (!res) {
+        setThreadError("Couldn't send this message.");
+      } else if ("error" in res) {
+        setThreadError(res.error);
+      } else {
+        setMessages(res.messages);
+        setSimulated(res.simulated);
+        setQualification(res.qualification ?? null);
+        setLead((prev) =>
+          prev ? { ...prev, status: res.lead.status ?? prev.status } : prev,
+        );
+        setInput("");
+      }
+    } catch {
+      setThreadError("Something went wrong. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleBook(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (booking || !bookDate || !bookTime) return;
+    setBooking(true);
+    setBookError(null);
+    try {
+      const res = await bookAppointment({
+        data: { leadId, date: bookDate, time: bookTime },
+      });
+      if (!res) {
+        setBookError("Couldn't book this call.");
+      } else if ("error" in res) {
+        setBookError(res.error);
+      } else {
+        setAppointment(res.appointment);
+        setLead((prev) =>
+          prev ? { ...prev, status: res.lead.status ?? prev.status } : prev,
+        );
+        setBookDate("");
+        setBookTime("");
+        await router.invalidate();
+      }
+    } catch {
+      setBookError("Something went wrong. Please try again.");
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  const qualBand = qualification ? qualificationBand(qualification.total_score) : null;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -86,6 +229,15 @@ function LeadDetailPage() {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {address}
           </p>
+          {lead.status ? (
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
+                statusBadge[lead.status] ?? statusBadge.new
+              }`}
+            >
+              {lead.status}
+            </span>
+          ) : null}
         </div>
         <div className="text-right">
           <p className={`text-4xl font-bold tabular-nums ${band ? bandText[band] : "text-gray-400"}`}>
@@ -101,9 +253,47 @@ function LeadDetailPage() {
         </div>
       </div>
 
-      {/* Inert action placeholders (next milestone: book call, mark hot, notes, archive) */}
-      <div className="mt-5 flex flex-wrap gap-2">
-        {["BOOK CALL", "MARK HOT", "ADD NOTE", "ARCHIVE"].map((label) => (
+      {/* Actions: BOOK CALL is live (investor action); the rest are placeholders */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        {appointment ? (
+          <button
+            type="button"
+            disabled
+            title="Call booked"
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+          >
+            Appointment booked: {appointment.date} {appointment.time}
+          </button>
+        ) : (
+          <form
+            onSubmit={handleBook}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <input
+              type="date"
+              value={bookDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setBookDate(e.target.value)}
+              aria-label="Appointment date"
+              className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            />
+            <input
+              type="time"
+              value={bookTime}
+              onChange={(e) => setBookTime(e.target.value)}
+              aria-label="Appointment time"
+              className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            />
+            <button
+              type="submit"
+              disabled={booking || !bookDate || !bookTime}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {booking ? "Booking…" : "BOOK CALL"}
+            </button>
+          </form>
+        )}
+        {["MARK HOT", "ADD NOTE", "ARCHIVE"].map((label) => (
           <button
             key={label}
             type="button"
@@ -114,6 +304,11 @@ function LeadDetailPage() {
           </button>
         ))}
       </div>
+      {bookError ? (
+        <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+          {bookError}
+        </p>
+      ) : null}
 
       {/* Lead facts */}
       <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:grid-cols-3 dark:border-gray-800 dark:bg-gray-900">
@@ -129,6 +324,154 @@ function LeadDetailPage() {
         <Fact label="Status" value={lead.status ?? "—"} />
         <Fact label="Added on" value={createdDate} />
       </dl>
+
+      {/* Seller conversation */}
+      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Seller conversation
+          </h2>
+          {simulated && (
+            <p className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              Simulated seller — add OPENAI_API_KEY to enable real AI
+              conversations
+            </p>
+          )}
+        </div>
+
+        {!hasThread ? (
+          <div className="mt-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No conversation yet. Start one and the AI assistant will qualify
+              the seller on condition, timeline, motivation, price flexibility
+              and availability for a call.
+            </p>
+            <button
+              type="button"
+              onClick={handleStart}
+              disabled={sending}
+              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sending ? "Starting…" : "Start conversation"}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <ul className="space-y-3">
+              {messages.map((m) => (
+                <li
+                  key={m.id}
+                  className={`flex ${m.sender === "ai" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
+                      m.sender === "ai"
+                        ? "rounded-br-sm bg-blue-600 text-white"
+                        : "rounded-bl-sm bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+                    }`}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                      {m.sender === "ai" ? "DealFlow AI" : "Seller"}
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-wrap">{m.message}</p>
+                    <p
+                      className={`mt-1 text-[10px] opacity-60 ${
+                        m.sender === "ai" ? "text-right" : ""
+                      }`}
+                    >
+                      {formatTime(m.timestamp)}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <form onSubmit={handleSend} className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                maxLength={2000}
+                placeholder="Type the seller's reply… (you're playing the seller)"
+                aria-label="Seller message"
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+              />
+              <button
+                type="submit"
+                disabled={sending || !input.trim()}
+                className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending ? "Sending…" : "Send as seller"}
+              </button>
+            </form>
+          </div>
+        )}
+        {threadError ? (
+          <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">
+            {threadError}
+          </p>
+        ) : null}
+      </section>
+
+      {/* Seller qualification */}
+      {qualification ? (
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              Seller qualification
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Recomputed after each message
+            </p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
+            {QUALIFICATION_DIMS.map((dim) => {
+              const value = qualification[dim.key];
+              return (
+                <div key={dim.key}>
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {dim.label}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900 dark:text-white">
+                    {value}
+                    <span className="text-sm font-normal text-gray-400">
+                      /5
+                    </span>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800/60">
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              Total{" "}
+              <span className="tabular-nums">
+                {qualification.total_score}/25
+              </span>
+            </p>
+            {qualBand ? (
+              <span
+                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${bandBadge[qualBand]}`}
+              >
+                {qualBand}
+              </span>
+            ) : null}
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {qualBand === "HOT" || qualBand === "WARM"
+                ? "Qualified — ready for the investor to book a call."
+                : "Not yet qualified — keep qualifying."}
+            </span>
+          </div>
+          {qualification.summary ? (
+            <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+              {qualification.summary}
+            </p>
+          ) : null}
+          <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-400 dark:border-gray-800 dark:text-gray-500">
+            Qualification scores are the assistant's read of the conversation —
+            the investor's team decides all offers and bookings.
+          </p>
+        </section>
+      ) : null}
 
       {/* Signal breakdown */}
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">

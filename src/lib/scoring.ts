@@ -108,3 +108,34 @@ export function formatCurrency(
     maximumFractionDigits: 0,
   });
 }
+
+/* ---------------------------------------------------------------------- */
+/* Seller qualification (AI conversation output, /25)                       */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * The five qualification dimensions, scored 0–5 each (total /25). Shared by
+ * the server (scoring) and the UI (labels), so they can never drift apart.
+ */
+export const QUALIFICATION_DIMS = [
+  { key: "motivation", label: "Motivation" },
+  { key: "timeline", label: "Timeline" },
+  { key: "condition", label: "Condition" },
+  { key: "price_flexibility", label: "Price flexibility" },
+  { key: "contactability", label: "Contactability" },
+] as const;
+
+/**
+ * Map a /25 qualification total to its band. Distinct from lead scoreToBand():
+ * 20–25 HOT · 15–19 WARM · 10–14 NURTURE · <10 LOW. A lead becomes qualified
+ * (status 'qualified') at total >= 15.
+ */
+export function qualificationBand(
+  total: number | null | undefined,
+): LeadBand | null {
+  if (total == null || Number.isNaN(total)) return null;
+  if (total >= 20) return "HOT";
+  if (total >= 15) return "WARM";
+  if (total >= 10) return "NURTURE";
+  return "LOW";
+}

@@ -105,8 +105,8 @@ function Dashboard() {
       </div>
 
       <div className="mt-8 rounded-xl border border-dashed border-gray-300 p-6 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-        Coming next: the AI seller conversation that qualifies hot leads and
-        books appointments.
+        The AI seller conversation qualifies hot leads and hands qualified
+        sellers to you to book calls. Open a lead to start a conversation.
       </div>
     </div>
   );
