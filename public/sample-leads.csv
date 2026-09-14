@@ -1,0 +1,10 @@
+owner_name,address,city,state,zip,property_type,estimated_value,estimated_equity,ownership_duration_years,vacancy_signal,needs_work_signal,distress_signal,absentee_owner_signal,recent_listing_withdrawal_signal,owned_since
+Eloise Carter,4829 Van Dyke St,Detroit,MI,48213,Single Family,"$185,000","$148,000",14,1,1,1,1,1,
+Marcus Bell,7315 Joy Rd,Detroit,MI,48204,Single Family,120000,66000,12,0,0,0,0,0,
+Ruth Okafor,8910 Gratiot Ave,Detroit,MI,48213,Duplex,140000,30000,2,1,1,1,0,0,
+Tomas Rivera,16123 Greenfield Rd,Detroit,MI,48235,Single Family,200000,160000,3,1,1,0,1,1,
+Grace Liu,3020 W Grand Blvd,Detroit,MI,48208,Condo,88000,12000,1,0,0,0,0,0,
+Dana Whitfield,5536 Tireman St,Detroit,MI,48204,Single Family,170000,136000,6,1,1,1,1,1,
+Sam Okonkwo,12419 Morang Dr,Detroit,MI,48224,Single Family,66000,4000,4,0,0,0,0,0,
+Patricia Nguyen,"12845 W. 8 Mile Rd, Unit 3B",Detroit,MI,48235,Single Family,150000,90000,,0,1,0,0,0,2015
+,,Unknown,MI,48299,,,,,0,0,0,0,0,
