@@ -156,7 +156,8 @@ const MIGRATIONS: string[] = [
     holding_costs    REAL,
     selling_costs    REAL,
     estimated_profit REAL,
-    roi              REAL
+    roi              REAL,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
   // Auth: httpOnly signed session cookie backed by this table.
   `CREATE TABLE IF NOT EXISTS sessions (
@@ -173,6 +174,7 @@ function runMigrations(database: Database): void {
   for (const ddl of MIGRATIONS) database.exec(ddl);
   ensureLeadColumns(database);
   ensureQualificationColumns(database);
+  ensureDealColumns(database);
   seedDemoUser(database);
 }
 
@@ -211,6 +213,23 @@ function ensureQualificationColumns(database: Database): void {
   }
   if (!names.has("updated_at")) {
     database.exec("ALTER TABLE qualification ADD COLUMN updated_at TEXT");
+  }
+}
+
+/**
+ * Idempotent column backfills for the `deals` table (milestone 4 adds the
+ * saved-at timestamp after the milestone-1 table already existed in some
+ * databases — ALTER TABLE if and only if the column is missing).
+ */
+function ensureDealColumns(database: Database): void {
+  const columns = database
+    .query("PRAGMA table_info(deals)")
+    .all() as Array<{ name: string }>;
+  const names = new Set(columns.map((c) => c.name));
+  if (!names.has("created_at")) {
+    database.exec(
+      "ALTER TABLE deals ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))",
+    );
   }
 }
 
