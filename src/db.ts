@@ -116,6 +116,8 @@ const MIGRATIONS: string[] = [
     needs_work_signal       INTEGER,
     distress_signal         INTEGER,
     absentee_owner_signal   INTEGER,
+    recent_listing_withdrawal_signal INTEGER,
+    signals_json            TEXT,
     created_at              TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id)`,
@@ -169,7 +171,28 @@ const MIGRATIONS: string[] = [
 
 function runMigrations(database: Database): void {
   for (const ddl of MIGRATIONS) database.exec(ddl);
+  ensureLeadColumns(database);
   seedDemoUser(database);
+}
+
+/**
+ * Idempotent column backfills for the `leads` table (milestone 2 shipped
+ * after the table already existed in some databases, so the CREATE TABLE
+ * above is not enough — ALTER TABLE if and only if the column is missing).
+ */
+function ensureLeadColumns(database: Database): void {
+  const columns = database
+    .query("PRAGMA table_info(leads)")
+    .all() as Array<{ name: string }>;
+  const names = new Set(columns.map((c) => c.name));
+  if (!names.has("recent_listing_withdrawal_signal")) {
+    database.exec(
+      "ALTER TABLE leads ADD COLUMN recent_listing_withdrawal_signal INTEGER",
+    );
+  }
+  if (!names.has("signals_json")) {
+    database.exec("ALTER TABLE leads ADD COLUMN signals_json TEXT");
+  }
 }
 
 /** Idempotent demo account: demo@dealflow.ai / demo1234. */
