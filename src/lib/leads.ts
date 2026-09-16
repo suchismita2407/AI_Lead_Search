@@ -22,11 +22,41 @@ export const importLeadsCsv = createServerFn({ method: "POST" })
     return await importLeadsCsvData(data.csv);
   });
 
-/** All leads for the current user (newest first). */
+/** All leads for the current user (newest first) — archived leads excluded. */
 export const listLeads = createServerFn().handler(async () => {
   const { listLeadsForUser } = await import("./leads.server");
   return await listLeadsForUser();
 });
+
+/** Only archived leads for the current user (the Archived list tab). */
+export const listArchivedLeads = createServerFn().handler(async () => {
+  const { listArchivedLeadsForUser } = await import("./leads.server");
+  return await listArchivedLeadsForUser();
+});
+
+/** MARK HOT / UNMARK HOT — sets the investor's flagged_hot on a lead. */
+export const setLeadHot = createServerFn({ method: "POST" })
+  .validator((d: { leadId: number; hot: boolean }) => d)
+  .handler(async ({ data }) => {
+    const { setLeadHotForUser } = await import("./leads.server");
+    return await setLeadHotForUser(data.leadId, data.hot);
+  });
+
+/** ADD NOTE / EDIT NOTE — stores the investor's note on a lead. */
+export const setLeadNote = createServerFn({ method: "POST" })
+  .validator((d: { leadId: number; note: string }) => d)
+  .handler(async ({ data }) => {
+    const { setLeadNoteForUser } = await import("./leads.server");
+    return await setLeadNoteForUser(data.leadId, data.note);
+  });
+
+/** ARCHIVE / RESTORE — hides (or restores) a lead in the list view. */
+export const setLeadArchived = createServerFn({ method: "POST" })
+  .validator((d: { leadId: number; archived: boolean }) => d)
+  .handler(async ({ data }) => {
+    const { setLeadArchivedForUser } = await import("./leads.server");
+    return await setLeadArchivedForUser(data.leadId, data.archived);
+  });
 
 /** Single lead (this user's) with its signal breakdown, or null. */
 export const getLead = createServerFn()

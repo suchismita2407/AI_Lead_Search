@@ -1,6 +1,11 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { getLead } from "~/lib/leads";
+import {
+  getLead,
+  setLeadArchived,
+  setLeadHot,
+  setLeadNote,
+} from "~/lib/leads";
 import {
   bookAppointment,
   sendSellerMessage,
@@ -18,7 +23,20 @@ import {
   scoreToBand,
 } from "~/lib/scoring";
 
+type LeadDetailData = NonNullable<Awaited<ReturnType<typeof getLead>>>;
+
 export const Route = createFileRoute("/app/leads_/$id")({
+  head: (({ loaderData }: {
+    loaderData?: LeadDetailData | null;
+  }) => ({
+    meta: [
+      {
+        title: loaderData?.owner_name
+          ? `DealFlow AI · Lead — ${loaderData.owner_name}`
+          : "DealFlow AI · Lead",
+      },
+    ],
+  })) as never,
   loader: async ({ params }) =>
     getLead({ data: { id: Number(params.id) } }),
   component: LeadDetailPage,
@@ -80,8 +98,6 @@ function formatTime(iso: string): string {
   });
 }
 
-type LeadDetailData = NonNullable<Awaited<ReturnType<typeof getLead>>>;
-
 function LeadDetailPage() {
   const router = useRouter();
   const initial = Route.useLoaderData();
@@ -105,6 +121,12 @@ function LeadDetailPage() {
   const [bookTime, setBookTime] = useState("");
   const [booking, setBooking] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
+  // Milestone 5 lead actions: MARK HOT / ADD NOTE / ARCHIVE
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(initial?.notes ?? "");
+  const [noteBusy, setNoteBusy] = useState(false);
 
   if (!lead) {
     return (
@@ -212,6 +234,74 @@ function LeadDetailPage() {
 
   const qualBand = qualification ? qualificationBand(qualification.total_score) : null;
 
+  /* ----------------- milestone 5: lead actions ----------------- */
+
+  async function handleToggleHot() {
+    if (actionBusy) return;
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      const res = await setLeadHot({
+        data: { leadId, hot: !lead.flagged_hot },
+      });
+      if (res) {
+        setLead((prev) =>
+          prev ? { ...prev, flagged_hot: res.flagged_hot } : prev,
+        );
+      }
+    } catch {
+      setActionError("Something went wrong. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function handleOpenNote() {
+    setNoteDraft(lead.notes);
+    setNoteOpen(true);
+  }
+
+  async function handleSaveNote() {
+    if (noteBusy) return;
+    setNoteBusy(true);
+    setActionError(null);
+    try {
+      const res = await setLeadNote({ data: { leadId, note: noteDraft } });
+      if (!res) {
+        setActionError("Couldn't save this note.");
+      } else if ("error" in res) {
+        setActionError(res.error);
+      } else {
+        setLead((prev) => (prev ? { ...prev, notes: res.note } : prev));
+        setNoteOpen(false);
+      }
+    } catch {
+      setActionError("Something went wrong. Please try again.");
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  async function handleToggleArchive() {
+    if (actionBusy) return;
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      const res = await setLeadArchived({
+        data: { leadId, archived: !lead.archived },
+      });
+      if (res) {
+        setLead((prev) =>
+          prev ? { ...prev, archived: res.archived } : prev,
+        );
+      }
+    } catch {
+      setActionError("Something went wrong. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <Link
@@ -238,6 +328,16 @@ function LeadDetailPage() {
               {lead.status}
             </span>
           ) : null}
+          {lead.flagged_hot ? (
+            <span className="mt-2 ml-1.5 inline-flex rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-400">
+              HOT
+            </span>
+          ) : null}
+          {lead.archived ? (
+            <span className="mt-2 ml-1.5 inline-flex rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+              Archived
+            </span>
+          ) : null}
         </div>
         <div className="text-right">
           <p className={`text-4xl font-bold tabular-nums ${band ? bandText[band] : "text-gray-400"}`}>
@@ -253,7 +353,7 @@ function LeadDetailPage() {
         </div>
       </div>
 
-      {/* Actions: BOOK CALL is live (investor action); the rest are placeholders */}
+      {/* Actions: BOOK CALL (investor action) + MARK HOT / ADD NOTE / ARCHIVE */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
         {appointment ? (
           <button
@@ -293,21 +393,106 @@ function LeadDetailPage() {
             </button>
           </form>
         )}
-        {["MARK HOT", "ADD NOTE", "ARCHIVE"].map((label) => (
-          <button
-            key={label}
-            type="button"
-            title="Coming in a later milestone"
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-          >
-            {label}
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={handleToggleHot}
+          disabled={actionBusy}
+          className={
+            lead.flagged_hot
+              ? "rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              : "rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold tracking-wide text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+          }
+        >
+          {lead.flagged_hot ? "UNMARK HOT" : "MARK HOT"}
+        </button>
+        <button
+          type="button"
+          onClick={handleOpenNote}
+          disabled={actionBusy || noteBusy}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          {lead.notes ? "EDIT NOTE" : "ADD NOTE"}
+        </button>
+        <button
+          type="button"
+          onClick={handleToggleArchive}
+          disabled={actionBusy}
+          className={
+            lead.archived
+              ? "rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold tracking-wide text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              : "rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+          }
+        >
+          {lead.archived ? "Restore" : "Archive"}
+        </button>
       </div>
+      {actionError ? (
+        <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+          {actionError}
+        </p>
+      ) : null}
       {bookError ? (
         <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
           {bookError}
         </p>
+      ) : null}
+
+      {/* Investor note (ADD NOTE / EDIT NOTE) */}
+      {lead.notes || noteOpen ? (
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              Note
+            </h2>
+            {!noteOpen && lead.notes ? (
+              <button
+                type="button"
+                onClick={handleOpenNote}
+                className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Edit
+              </button>
+            ) : null}
+          </div>
+          {noteOpen ? (
+            <div className="mt-3">
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                aria-label="Lead note"
+                placeholder="Context for you and your team (private — never sent to the seller)…"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveNote}
+                  disabled={noteBusy}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {noteBusy ? "Saving…" : "Save note"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoteOpen(false);
+                    setNoteDraft(lead.notes);
+                  }}
+                  disabled={noteBusy}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+              {lead.notes}
+            </p>
+          )}
+        </div>
       ) : null}
 
       {/* Lead facts */}

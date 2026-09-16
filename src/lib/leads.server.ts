@@ -38,6 +38,12 @@ export interface LeadListItem {
   lead_score: number | null;
   band: LeadBand | null;
   status: string | null;
+  /** Investor flag: 1 when the lead is marked HOT from the detail page. */
+  flagged_hot: boolean;
+  /** Investor free-text note (leads.notes), "" when none. */
+  notes: string;
+  /** 1 when the lead is archived (hidden from the default list). */
+  archived: boolean;
   created_at: string;
 }
 
@@ -78,16 +84,34 @@ function toLeadListItem(row: Record<string, unknown>): LeadListItem {
     lead_score: score,
     band: scoreToBand(score),
     status: row.status == null ? null : String(row.status),
+    flagged_hot: Number(row.flagged_hot ?? 0) === 1,
+    notes: row.notes == null ? "" : String(row.notes),
+    archived: Number(row.archived ?? 0) === 1,
     created_at: String(row.created_at ?? ""),
   };
 }
 
-/** All leads for the current user, newest first. */
+/**
+ * All NON-ARCHIVED leads for the current user, newest first. Archive is a list
+ * filter, not a delete — archived leads are still reachable by id (detail page,
+ * conversation, booking) and via the Archived tab on this page.
+ */
 export async function listLeadsForUser(): Promise<LeadListItem[]> {
   const user = await requireUser();
   const rows = await sql()`
     SELECT * FROM leads
-    WHERE user_id = ${user.id}
+    WHERE user_id = ${user.id} AND archived IS NOT 1
+    ORDER BY created_at DESC, id DESC
+  `;
+  return rows.map(toLeadListItem);
+}
+
+/** Only archived leads for the current user (the Archived list tab). */
+export async function listArchivedLeadsForUser(): Promise<LeadListItem[]> {
+  const user = await requireUser();
+  const rows = await sql()`
+    SELECT * FROM leads
+    WHERE user_id = ${user.id} AND archived = 1
     ORDER BY created_at DESC, id DESC
   `;
   return rows.map(toLeadListItem);
@@ -222,4 +246,77 @@ export async function importLeadsCsvData(
     skipped,
     bands,
   };
+}
+
+/* ---------------------------------------------------------------------- */
+/* Lead actions (milestone 5): MARK HOT / ADD NOTE / ARCHIVE               */
+/* ---------------------------------------------------------------------- */
+
+export const MAX_LEAD_NOTE_LENGTH = 2000;
+
+/** Scoped ownership check — every action below verifies the lead is the user's. */
+async function ownedLead(leadId: number, userId: number): Promise<boolean> {
+  const rows = await sql()`
+    SELECT id FROM leads WHERE id = ${leadId} AND user_id = ${userId}
+  `;
+  return rows.length > 0;
+}
+
+/**
+ * MARK HOT / UNMARK HOT — sets leads.flagged_hot (independent of the score
+ * band, which stays the screening-signal read). Returns the new state, or null
+ * when the lead isn't the user's.
+ */
+export async function setLeadHotForUser(
+  leadId: number,
+  hot: boolean,
+): Promise<{ flagged_hot: boolean } | null> {
+  const user = await requireUser();
+  if (!(await ownedLead(leadId, user.id))) return null;
+  await sql().run`
+    UPDATE leads SET flagged_hot = ${hot ? 1 : 0}
+    WHERE id = ${leadId} AND user_id = ${user.id}
+  `;
+  return { flagged_hot: hot };
+}
+
+/**
+ * ADD NOTE / EDIT NOTE — stores the investor's free-text note on the lead
+ * ("" clears it). Trimmed; capped at MAX_LEAD_NOTE_LENGTH.
+ */
+export async function setLeadNoteForUser(
+  leadId: number,
+  rawNote: string,
+): Promise<{ error: string } | { note: string } | null> {
+  const user = await requireUser();
+  if (!(await ownedLead(leadId, user.id))) return null;
+  const note = String(rawNote ?? "").trim();
+  if (note.length > MAX_LEAD_NOTE_LENGTH) {
+    return {
+      error: `Note is too long (max ${MAX_LEAD_NOTE_LENGTH} characters).`,
+    };
+  }
+  await sql().run`
+    UPDATE leads SET notes = ${note}
+    WHERE id = ${leadId} AND user_id = ${user.id}
+  `;
+  return { note };
+}
+
+/**
+ * ARCHIVE / RESTORE — sets leads.archived. Archive hides the lead from the
+ * default list only: the detail page, conversation, qualification and booking
+ * all keep working on archived leads.
+ */
+export async function setLeadArchivedForUser(
+  leadId: number,
+  archived: boolean,
+): Promise<{ archived: boolean } | null> {
+  const user = await requireUser();
+  if (!(await ownedLead(leadId, user.id))) return null;
+  await sql().run`
+    UPDATE leads SET archived = ${archived ? 1 : 0}
+    WHERE id = ${leadId} AND user_id = ${user.id}
+  `;
+  return { archived };
 }

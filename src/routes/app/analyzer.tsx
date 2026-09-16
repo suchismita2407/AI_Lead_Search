@@ -12,6 +12,9 @@ import {
 import { formatCurrency } from "~/lib/scoring";
 
 export const Route = createFileRoute("/app/analyzer")({
+  head: () => ({
+    meta: [{ title: "DealFlow AI · Deal Analyzer" }],
+  }),
   loader: async () => {
     const [leads, deals] = await Promise.all([listLeads(), listDeals()]);
     return { leads, deals };

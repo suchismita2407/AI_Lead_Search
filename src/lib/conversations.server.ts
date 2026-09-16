@@ -202,9 +202,10 @@ export async function sendSellerMessageForLead(
     VALUES (${leadId}, ${channel}, 'seller', ${text})
   `;
 
-  // Generate + store the assistant's reply from the updated thread.
+  // Generate + store the assistant's reply from the updated thread. Pass the
+  // user id so the system prompt can include their saved AI instructions.
   const history = await getConversationForLead(leadId, user.id);
-  const reply = await buildAiReply(history);
+  const reply = await buildAiReply(history, { userId: user.id });
   await sql().insert`
     INSERT INTO conversations (lead_id, channel, sender, message)
     VALUES (${leadId}, ${channel}, 'ai', ${reply.slice(0, MAX_MESSAGE_LENGTH)})

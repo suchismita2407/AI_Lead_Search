@@ -43,6 +43,19 @@ CRITICAL CONSTRAINTS — never violate these:
 - NEVER invent, confirm or contradict facts about the property that the seller has not stated.
 - Keep every message short (1-3 sentences), plain and human. No lists, no jargon, no sales pressure.`;
 
+/**
+ * The persona + safety constraints for the seller assistant, optionally
+ * extended with the investor's own AI instructions (from Settings). The
+ * investor's guidance is appended as additional direction — it can focus the
+ * assistant (e.g. preferred markets or property types) but never overrides the
+ * CRITICAL CONSTRAINTS above.
+ */
+export function buildSystemPrompt(aiInstructions?: string | null): string {
+  const extra = (aiInstructions ?? "").trim();
+  if (!extra) return SELLER_ASSISTANT_SYSTEM_PROMPT;
+  return `${SELLER_ASSISTANT_SYSTEM_PROMPT}\n\nAdditional investor guidance — follow these instructions from the investor you work for:\n${extra}`;
+}
+
 /** GPT model — env-overridable, defaults to the cheap-but-capable mini. */
 export function chatModel(): string {
   return process.env.AI_MODEL || "gpt-4o-mini";
@@ -159,15 +172,34 @@ function threadToMessages(
  * Real mode calls OpenAI (with a graceful fall back to the script when the
  * API fails for any reason — the conversation must never break). Simulated
  * mode returns the scripted reply.
+ *
+ * When `opts.userId` is given, the user's saved AI instructions (Settings) are
+ * appended to the system prompt so the assistant follows the investor's
+ * guidance. Simulated mode is intentionally unchanged.
  */
 export async function buildAiReply(
   history: ConversationMessage[],
+  opts: { userId?: number } = {},
 ): Promise<string> {
   const sellerCount = history.filter((m) => m.sender === "seller").length;
   if (isSimulatedMode()) return simulatedAiReply(sellerCount);
+
+  let systemPrompt = SELLER_ASSISTANT_SYSTEM_PROMPT;
+  if (opts.userId != null) {
+    try {
+      const { getAiInstructionsForUser } = await import("./settings.server");
+      systemPrompt = buildSystemPrompt(await getAiInstructionsForUser(opts.userId));
+    } catch (err) {
+      console.error(
+        "[ai.server] could not load investor instructions, using base prompt:",
+        err,
+      );
+    }
+  }
+
   try {
     const content = await openAiChatCompletion(
-      threadToMessages(history, SELLER_ASSISTANT_SYSTEM_PROMPT),
+      threadToMessages(history, systemPrompt),
       { maxTokens: 200 },
     );
     return content.slice(0, 2000);
