@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   html,
   body {
     @apply bg-white text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100;
