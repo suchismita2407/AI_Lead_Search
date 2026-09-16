@@ -1,12 +1,18 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { importLeadsCsv, listLeads } from "~/lib/leads";
+import { importLeadsCsv, listArchivedLeads, listLeads } from "~/lib/leads";
 import type { ImportLeadsResult } from "~/lib/leads";
 import { BANDS } from "~/lib/scoring";
 import type { LeadBand } from "~/lib/scoring";
 
 export const Route = createFileRoute("/app/leads")({
-  loader: async () => listLeads(),
+  head: () => ({
+    meta: [{ title: "DealFlow AI · Leads" }],
+  }),
+  loader: async () => ({
+    leads: await listLeads(),
+    archived: await listArchivedLeads(),
+  }),
   component: LeadsPage,
 });
 
@@ -27,13 +33,13 @@ const bandDot: Record<LeadBand, string> = {
 
 function LeadsPage() {
   const router = useRouter();
-  const leads = Route.useLoaderData();
+  const { leads, archived } = Route.useLoaderData();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [summary, setSummary] = useState<ImportLeadsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
-  const [tab, setTab] = useState<LeadBand | "ALL">("ALL");
+  const [tab, setTab] = useState<LeadBand | "ALL" | "ARCHIVED">("ALL");
   const [query, setQuery] = useState("");
 
   const counts = BANDS.reduce<Record<LeadBand, number>>(
@@ -69,8 +75,11 @@ function LeadsPage() {
     setFileLabel(file ? file.name : null);
   }
 
-  const filtered = leads.filter((lead) => {
-    if (tab !== "ALL" && lead.band !== tab) return false;
+  const source = tab === "ARCHIVED" ? archived : leads;
+  const filtered = source.filter((lead) => {
+    if (tab !== "ALL" && tab !== "ARCHIVED" && lead.band !== tab) {
+      return false;
+    }
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return [lead.owner_name, lead.property_address, lead.city].some((v) =>
@@ -199,10 +208,15 @@ function LeadsPage() {
           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:max-w-xs dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
         />
         <div className="flex flex-wrap gap-1.5">
-          {(["ALL", ...BANDS] as const).map((b) => {
+          {(["ALL", ...BANDS, "ARCHIVED"] as const).map((b) => {
             const active = tab === b;
-            const label = b === "ALL" ? "All" : b;
-            const n = b === "ALL" ? leads.length : (counts as Record<LeadBand, number>)[b as LeadBand] ?? 0;
+            const label = b === "ALL" ? "All" : b === "ARCHIVED" ? "Archived" : b;
+            const n =
+              b === "ALL"
+                ? leads.length
+                : b === "ARCHIVED"
+                  ? archived.length
+                  : (counts as Record<LeadBand, number>)[b as LeadBand] ?? 0;
             return (
               <button
                 key={b}
@@ -293,7 +307,13 @@ function LeadsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                    {lead.status ?? "—"}
+                    {tab === "ARCHIVED" ? (
+                      <span className="inline-flex rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                        Archived
+                      </span>
+                    ) : (
+                      lead.status ?? "—"
+                    )}
                   </td>
                 </tr>
               );

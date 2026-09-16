@@ -43,6 +43,9 @@ export const dashboardStats = createServerFn().handler(async () => {
 });
 
 export const Route = createFileRoute("/app/dashboard")({
+  head: () => ({
+    meta: [{ title: "DealFlow AI · Dashboard" }],
+  }),
   loader: async () => dashboardStats(),
   component: Dashboard,
 });

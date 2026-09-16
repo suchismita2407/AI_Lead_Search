@@ -168,6 +168,19 @@ const MIGRATIONS: string[] = [
     expires_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`,
+  // Investor workspace settings (per user, one row): names, contact channels
+  // and the custom AI-instructions the seller assistant follows.
+  `CREATE TABLE IF NOT EXISTS user_settings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    business_name   TEXT,
+    phone           TEXT,
+    business_email  TEXT,
+    calendar        TEXT,
+    messaging       TEXT,
+    ai_instructions TEXT,
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
 ];
 
 function runMigrations(database: Database): void {
@@ -195,6 +208,17 @@ function ensureLeadColumns(database: Database): void {
   }
   if (!names.has("signals_json")) {
     database.exec("ALTER TABLE leads ADD COLUMN signals_json TEXT");
+  }
+  // Milestone 5: investor bookkeeping flags, kept OFF the `status` column
+  // (status carries the lifecycle new → contacted → qualified → booked).
+  if (!names.has("flagged_hot")) {
+    database.exec("ALTER TABLE leads ADD COLUMN flagged_hot INTEGER DEFAULT 0");
+  }
+  if (!names.has("notes")) {
+    database.exec("ALTER TABLE leads ADD COLUMN notes TEXT");
+  }
+  if (!names.has("archived")) {
+    database.exec("ALTER TABLE leads ADD COLUMN archived INTEGER DEFAULT 0");
   }
 }
 

@@ -3,6 +3,9 @@ import { useState, type FormEvent } from "react";
 import { loginUser, registerUser } from "~/lib/auth";
 
 export const Route = createFileRoute("/login")({
+  head: () => ({
+    meta: [{ title: "DealFlow AI · Sign in" }],
+  }),
   component: LoginPage,
 });
 

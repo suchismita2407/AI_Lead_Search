@@ -2,6 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { campaignStats } from "~/lib/campaigns";
 
 export const Route = createFileRoute("/app/campaigns")({
+  head: () => ({
+    meta: [{ title: "DealFlow AI · Campaigns" }],
+  }),
   loader: async () => campaignStats(),
   component: CampaignsPage,
 });
