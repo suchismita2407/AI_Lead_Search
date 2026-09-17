@@ -35,3 +35,15 @@ export const logoutUser = createServerFn({ method: "POST" }).handler(async () =>
   const { logoutCurrentSession } = await import("./auth.server");
   return await logoutCurrentSession();
 });
+
+export const verifyEmail = createServerFn({ method: "POST" })
+  .validator((d: { token: string }) => d)
+  .handler(async ({ data }) => (await import("./auth.server")).verifyEmail(data.token));
+
+export const requestPasswordReset = createServerFn({ method: "POST" })
+  .validator((d: { email: string }) => d)
+  .handler(async ({ data }) => (await import("./auth.server")).requestPasswordReset(data.email));
+
+export const resetPassword = createServerFn({ method: "POST" })
+  .validator((d: { token: string; password: string }) => d)
+  .handler(async ({ data }) => (await import("./auth.server")).resetPassword(data.token, data.password));

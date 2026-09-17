@@ -100,7 +100,7 @@ export async function listLeadsForUser(): Promise<LeadListItem[]> {
   const user = await requireUser();
   const rows = await sql()`
     SELECT * FROM leads
-    WHERE user_id = ${user.id} AND archived IS NOT 1
+    WHERE user_id = ${user.id} AND archived <> 1
     ORDER BY created_at DESC, id DESC
   `;
   return rows.map(toLeadListItem);

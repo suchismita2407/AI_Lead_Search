@@ -1,309 +1,50 @@
-/**
- * DealFlow AI — data layer (MVP).
- *
- * SQLite via Bun's built-in `bun:sqlite` — zero extra npm dependencies and no
- * external database service (no DATABASE_URL is available to this team yet).
- * Every table from the product spec is created idempotently at startup, plus a
- * `sessions` table backing the auth cookie.
- *
- * The rest of the app talks to this module only through the `sql()` tagged
- * template helper, so swapping this file for a Supabase/Postgres
- * implementation later (per the product plan) changes one module, not the app.
- *
- * SERVER-ONLY: import and call this ONLY inside `createServerFn()` handlers or
- * `src/routes/api/*` routes — never from client components.
- *
- * Bundling note: this module must remain CLIENT-SAFE at module scope, because
- * this TanStack Start version does not isolate server-only modules from the
- * client graph — server-fn files are client-importable, so their transitive
- * imports land in the browser bundle too. That is why `bun:sqlite` /
- * `node:fs` / `node:path` are loaded dynamically INSIDE the database open
- * function rather than imported at the top. On the client the module loads
- * but nothing ever calls it.
- */
-import type { Database, SQLiteBindValue } from "bun:sqlite";
+/** PostgreSQL data layer. Requires DATABASE_URL (Neon/Supabase pooled URL). */
+import { Pool, type QueryResultRow } from "pg";
 
 export type SqlRow = Record<string, unknown>;
-
-export interface SqlResult {
-  changes: number;
-  lastInsertRowid: number | bigint;
-}
-
-/**
- * Tagged-template query helper. `sql()` returns a function you call with a
- * template literal — the call returns a Promise, so `await` it:
- *
- *   const rows = await sql()`select id, name from users where email = ${email}`;
- *
- * `.run` / `.insert` execute writes (INSERT/UPDATE/DELETE) and return the
- * statement result / new row id.
- */
+export interface SqlResult { changes: number; lastInsertRowid: number; }
 export interface SqlTag {
-  (strings: TemplateStringsArray, ...params: SQLiteBindValue[]): Promise<SqlRow[]>;
-  run(
-    strings: TemplateStringsArray,
-    ...params: SQLiteBindValue[]
-  ): Promise<SqlResult>;
-  insert(
-    strings: TemplateStringsArray,
-    ...params: SQLiteBindValue[]
-  ): Promise<number>;
+  (strings: TemplateStringsArray, ...params: unknown[]): Promise<SqlRow[]>;
+  run(strings: TemplateStringsArray, ...params: unknown[]): Promise<SqlResult>;
+  insert(strings: TemplateStringsArray, ...params: unknown[]): Promise<number>;
 }
 
-let dbPromise: Promise<Database> | null = null;
+declare global { var __dealflowPool: Pool | undefined; var __dealflowSchemaReady: Promise<void> | undefined; }
 
-/** Server-only database path, resolved lazily on the server. */
-function dbPath(): string {
-  const cwd = process.cwd();
-  return `${cwd}/data/dealflow.db`;
+function pool(): Pool {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required. Configure a pooled Neon or Supabase Postgres URL.");
+  return (globalThis.__dealflowPool ??= new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined, max: 5 }));
 }
 
-/**
- * Lazy singleton. Migrations + demo-user seed run once, on first use — which,
- * because this module is part of the server startup graph, is effectively at
- * boot for the published build.
- */
-export function getDb(): Promise<Database> {
-  if (!dbPromise) {
-    dbPromise = (async () => {
-      // Bun builtins — resolved natively by the Bun runtime on the server.
-      const { mkdirSync } = await import("node:fs");
-      const { Database } = await import("bun:sqlite");
-
-      const path = process.env.DEALFLOW_DB_PATH ?? dbPath();
-      mkdirSync(path.slice(0, path.lastIndexOf("/")), { recursive: true });
-
-      const database = new Database(path);
-      database.exec("PRAGMA journal_mode = WAL;");
-      database.exec("PRAGMA foreign_keys = ON;");
-      database.exec("PRAGMA busy_timeout = 5000;");
-      runMigrations(database);
-      return database;
-    })();
-  }
-  return dbPromise;
+function compile(strings: TemplateStringsArray, values: unknown[]) {
+  return { text: strings.reduce((out, part, i) => out + part + (i < values.length ? `$${i + 1}` : ""), ""), values };
 }
 
-/* ---------------------------------------------------------------------- */
-/* Migrations — idempotent (CREATE TABLE IF NOT EXISTS ...)                */
-/* ---------------------------------------------------------------------- */
+const migration = `
+CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, company TEXT, password_hash TEXT NOT NULL, email_verified_at TEXT, created_at TEXT NOT NULL DEFAULT now()::text);
+CREATE TABLE IF NOT EXISTS sessions (id BIGSERIAL PRIMARY KEY, token TEXT NOT NULL UNIQUE, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT now()::text, expires_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE TABLE IF NOT EXISTS auth_tokens (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, purpose TEXT NOT NULL CHECK (purpose IN ('verify_email','reset_password')), token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, consumed_at TEXT, created_at TEXT NOT NULL DEFAULT now()::text);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_lookup ON auth_tokens(token_hash, purpose);
+CREATE TABLE IF NOT EXISTS rate_limit_events (id BIGSERIAL PRIMARY KEY, scope TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT now()::text);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_events_scope ON rate_limit_events(scope, created_at);
+CREATE TABLE IF NOT EXISTS subscriptions (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, provider_subscription_id TEXT UNIQUE, plan TEXT NOT NULL DEFAULT 'free', status TEXT NOT NULL DEFAULT 'inactive', current_period_end TEXT, created_at TEXT NOT NULL DEFAULT now()::text, updated_at TEXT NOT NULL DEFAULT now()::text);
+CREATE TABLE IF NOT EXISTS billing_events (id BIGSERIAL PRIMARY KEY, provider TEXT NOT NULL, event_id TEXT NOT NULL, payload JSONB NOT NULL, created_at TEXT NOT NULL DEFAULT now()::text, UNIQUE(provider,event_id));
+CREATE TABLE IF NOT EXISTS leads (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, owner_name TEXT, property_address TEXT, city TEXT, state TEXT, zip TEXT, property_type TEXT, estimated_value DOUBLE PRECISION, estimated_equity DOUBLE PRECISION, lead_score INTEGER, status TEXT, ownership_duration_years DOUBLE PRECISION, vacancy_signal INTEGER, needs_work_signal INTEGER, distress_signal INTEGER, absentee_owner_signal INTEGER, recent_listing_withdrawal_signal INTEGER, signals_json TEXT, flagged_hot INTEGER DEFAULT 0, notes TEXT, archived INTEGER DEFAULT 0, created_at TEXT NOT NULL DEFAULT now()::text);
+CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id);
+CREATE TABLE IF NOT EXISTS conversations (id BIGSERIAL PRIMARY KEY, lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE, channel TEXT, sender TEXT, message TEXT, timestamp TEXT NOT NULL DEFAULT now()::text);
+CREATE TABLE IF NOT EXISTS qualification (lead_id BIGINT PRIMARY KEY REFERENCES leads(id) ON DELETE CASCADE, motivation INTEGER NOT NULL DEFAULT 0 CHECK (motivation BETWEEN 0 AND 5), timeline INTEGER NOT NULL DEFAULT 0 CHECK (timeline BETWEEN 0 AND 5), condition INTEGER NOT NULL DEFAULT 0 CHECK (condition BETWEEN 0 AND 5), price_flexibility INTEGER NOT NULL DEFAULT 0 CHECK (price_flexibility BETWEEN 0 AND 5), contactability INTEGER NOT NULL DEFAULT 0 CHECK (contactability BETWEEN 0 AND 5), total_score INTEGER NOT NULL DEFAULT 0 CHECK (total_score BETWEEN 0 AND 25), summary TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS appointments (id BIGSERIAL PRIMARY KEY, lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE, date TEXT, time TEXT, status TEXT, created_at TEXT NOT NULL DEFAULT now()::text);
+CREATE TABLE IF NOT EXISTS deals (id BIGSERIAL PRIMARY KEY, lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE, purchase_price DOUBLE PRECISION, rehab DOUBLE PRECISION, arv DOUBLE PRECISION, closing_costs DOUBLE PRECISION, holding_costs DOUBLE PRECISION, selling_costs DOUBLE PRECISION, estimated_profit DOUBLE PRECISION, roi DOUBLE PRECISION, created_at TEXT NOT NULL DEFAULT now()::text);
+CREATE TABLE IF NOT EXISTS user_settings (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, business_name TEXT, phone TEXT, business_email TEXT, calendar TEXT, messaging TEXT, ai_instructions TEXT, updated_at TEXT NOT NULL DEFAULT now()::text);
+`;
 
-const MIGRATIONS: string[] = [
-  `CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    name          TEXT NOT NULL,
-    email         TEXT NOT NULL UNIQUE,
-    company       TEXT,
-    password_hash TEXT NOT NULL,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  `CREATE TABLE IF NOT EXISTS leads (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    owner_name              TEXT,
-    property_address        TEXT,
-    city                    TEXT,
-    state                   TEXT,
-    zip                     TEXT,
-    property_type           TEXT,
-    estimated_value         REAL,
-    estimated_equity        REAL,
-    lead_score              INTEGER,
-    status                  TEXT,
-    ownership_duration_years REAL,
-    vacancy_signal          INTEGER,
-    needs_work_signal       INTEGER,
-    distress_signal         INTEGER,
-    absentee_owner_signal   INTEGER,
-    recent_listing_withdrawal_signal INTEGER,
-    signals_json            TEXT,
-    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_leads_user ON leads(user_id)`,
-  `CREATE TABLE IF NOT EXISTS conversations (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead_id   INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-    channel   TEXT,
-    sender    TEXT,
-    message   TEXT,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  `CREATE TABLE IF NOT EXISTS qualification (
-    lead_id           INTEGER PRIMARY KEY REFERENCES leads(id) ON DELETE CASCADE,
-    motivation        INTEGER NOT NULL DEFAULT 0 CHECK (motivation BETWEEN 0 AND 5),
-    timeline          INTEGER NOT NULL DEFAULT 0 CHECK (timeline BETWEEN 0 AND 5),
-    condition         INTEGER NOT NULL DEFAULT 0 CHECK (condition BETWEEN 0 AND 5),
-    price_flexibility INTEGER NOT NULL DEFAULT 0 CHECK (price_flexibility BETWEEN 0 AND 5),
-    contactability    INTEGER NOT NULL DEFAULT 0 CHECK (contactability BETWEEN 0 AND 5),
-    total_score       INTEGER NOT NULL DEFAULT 0 CHECK (total_score BETWEEN 0 AND 25)
-  )`,
-  `CREATE TABLE IF NOT EXISTS appointments (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead_id    INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-    date       TEXT,
-    time       TEXT,
-    status     TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  `CREATE TABLE IF NOT EXISTS deals (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    lead_id          INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-    purchase_price   REAL,
-    rehab            REAL,
-    arv              REAL,
-    closing_costs    REAL,
-    holding_costs    REAL,
-    selling_costs    REAL,
-    estimated_profit REAL,
-    roi              REAL,
-    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  // Auth: httpOnly signed session cookie backed by this table.
-  `CREATE TABLE IF NOT EXISTS sessions (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    token      TEXT NOT NULL UNIQUE,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    expires_at TEXT NOT NULL
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)`,
-  // Investor workspace settings (per user, one row): names, contact channels
-  // and the custom AI-instructions the seller assistant follows.
-  `CREATE TABLE IF NOT EXISTS user_settings (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id         INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    business_name   TEXT,
-    phone           TEXT,
-    business_email  TEXT,
-    calendar        TEXT,
-    messaging       TEXT,
-    ai_instructions TEXT,
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-];
-
-function runMigrations(database: Database): void {
-  for (const ddl of MIGRATIONS) database.exec(ddl);
-  ensureLeadColumns(database);
-  ensureQualificationColumns(database);
-  ensureDealColumns(database);
-  seedDemoUser(database);
-}
-
-/**
- * Idempotent column backfills for the `leads` table (milestone 2 shipped
- * after the table already existed in some databases, so the CREATE TABLE
- * above is not enough — ALTER TABLE if and only if the column is missing).
- */
-function ensureLeadColumns(database: Database): void {
-  const columns = database
-    .query("PRAGMA table_info(leads)")
-    .all() as Array<{ name: string }>;
-  const names = new Set(columns.map((c) => c.name));
-  if (!names.has("recent_listing_withdrawal_signal")) {
-    database.exec(
-      "ALTER TABLE leads ADD COLUMN recent_listing_withdrawal_signal INTEGER",
-    );
-  }
-  if (!names.has("signals_json")) {
-    database.exec("ALTER TABLE leads ADD COLUMN signals_json TEXT");
-  }
-  // Milestone 5: investor bookkeeping flags, kept OFF the `status` column
-  // (status carries the lifecycle new → contacted → qualified → booked).
-  if (!names.has("flagged_hot")) {
-    database.exec("ALTER TABLE leads ADD COLUMN flagged_hot INTEGER DEFAULT 0");
-  }
-  if (!names.has("notes")) {
-    database.exec("ALTER TABLE leads ADD COLUMN notes TEXT");
-  }
-  if (!names.has("archived")) {
-    database.exec("ALTER TABLE leads ADD COLUMN archived INTEGER DEFAULT 0");
-  }
-}
-
-/**
- * Idempotent column backfills for the `qualification` table (milestone 3
- * adds the AI-written summary + updated_at to the milestone-2 table — ALTER
- * TABLE if and only if the column is missing).
- */
-function ensureQualificationColumns(database: Database): void {
-  const columns = database
-    .query("PRAGMA table_info(qualification)")
-    .all() as Array<{ name: string }>;
-  const names = new Set(columns.map((c) => c.name));
-  if (!names.has("summary")) {
-    database.exec("ALTER TABLE qualification ADD COLUMN summary TEXT");
-  }
-  if (!names.has("updated_at")) {
-    database.exec("ALTER TABLE qualification ADD COLUMN updated_at TEXT");
-  }
-}
-
-/**
- * Idempotent column backfills for the `deals` table (milestone 4 adds the
- * saved-at timestamp after the milestone-1 table already existed in some
- * databases — ALTER TABLE if and only if the column is missing).
- */
-function ensureDealColumns(database: Database): void {
-  const columns = database
-    .query("PRAGMA table_info(deals)")
-    .all() as Array<{ name: string }>;
-  const names = new Set(columns.map((c) => c.name));
-  if (!names.has("created_at")) {
-    database.exec(
-      "ALTER TABLE deals ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))",
-    );
-  }
-}
-
-/** Idempotent demo account: demo@dealflow.ai / demo1234. */
-function seedDemoUser(database: Database): void {
-  const existing = database
-    .query("SELECT id FROM users WHERE email = ?")
-    .get("demo@dealflow.ai");
-  if (existing) return;
-  const hash = Bun.password.hashSync("demo1234");
-  database
-    .query(
-      "INSERT INTO users (name, email, company, password_hash) VALUES (?, ?, ?, ?)",
-    )
-    .run("Demo Investor", "demo@dealflow.ai", "Demo Co", hash);
-}
-
-/* ---------------------------------------------------------------------- */
-/* Tagged-template helper                                                  */
-/* ---------------------------------------------------------------------- */
-
-function toSqlText(strings: TemplateStringsArray, params: unknown[]): string {
-  let text = "";
-  for (let i = 0; i < strings.length; i++) {
-    text += strings[i] ?? "";
-    if (i < params.length) text += "?";
-  }
-  return text;
-}
+async function ensureSchema(): Promise<void> { globalThis.__dealflowSchemaReady ??= pool().query(migration).then(() => undefined); return globalThis.__dealflowSchemaReady; }
+async function query(strings: TemplateStringsArray, params: unknown[]): Promise<QueryResultRow[]> { await ensureSchema(); const q = compile(strings, params); return (await pool().query(q.text, q.values)).rows; }
 
 export function sql(): SqlTag {
-  const tag = (async (
-    strings: TemplateStringsArray,
-    ...params: SQLiteBindValue[]
-  ) => {
-    const database = await getDb();
-    return database.query(toSqlText(strings, params)).all(...params);
-  }) as unknown as SqlTag;
-
-  tag.run = async (strings, ...params) => {
-    const database = await getDb();
-    return database.query(toSqlText(strings, params)).run(...params);
-  };
-
-  tag.insert = async (strings, ...params) => {
-    const database = await getDb();
-    return Number(
-      database.query(toSqlText(strings, params)).run(...params).lastInsertRowid,
-    );
-  };
-
+  const tag = ((strings: TemplateStringsArray, ...params: unknown[]) => query(strings, params)) as SqlTag;
+  tag.run = async (strings, ...params) => { await ensureSchema(); const q = compile(strings, params); const result = await pool().query(q.text, q.values); return { changes: result.rowCount ?? 0, lastInsertRowid: 0 }; };
+  tag.insert = async (strings, ...params) => { await ensureSchema(); const q = compile(strings, params); const rows = (await pool().query(`${q.text} RETURNING id`, q.values)).rows; return Number(rows[0]?.id ?? 0); };
   return tag;
 }

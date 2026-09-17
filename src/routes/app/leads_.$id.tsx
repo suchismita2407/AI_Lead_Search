@@ -518,7 +518,7 @@ function LeadDetailPage() {
           </h2>
           {simulated && (
             <p className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-              Simulated seller — add OPENAI_API_KEY to enable real AI
+              AI simulation mode — configure an AI provider to enable live responses
               conversations
             </p>
           )}

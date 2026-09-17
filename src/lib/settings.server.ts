@@ -116,7 +116,7 @@ export async function saveSettingsForUser(
     ) VALUES (
       ${user.id}, ${cleaned.business_name}, ${cleaned.phone},
       ${cleaned.business_email}, ${cleaned.calendar}, ${cleaned.messaging},
-      ${cleaned.ai_instructions}, datetime('now')
+      ${cleaned.ai_instructions}, now()::text
     )
     ON CONFLICT(user_id) DO UPDATE SET
       business_name = excluded.business_name,
@@ -125,7 +125,7 @@ export async function saveSettingsForUser(
       calendar = excluded.calendar,
       messaging = excluded.messaging,
       ai_instructions = excluded.ai_instructions,
-      updated_at = datetime('now')
+      updated_at = now()::text
   `;
 
   return { settings: cleaned };

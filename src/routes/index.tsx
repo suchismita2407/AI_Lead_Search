@@ -2,27 +2,23 @@
  * DealFlow AI — landing page (the public marketing front door).
  *
  * Replaces the old root redirect-to-login: the root URL now presents the
- * product — hero, live demo metrics, the 6-step pipeline (#product), a pricing
+ * product — hero, product metrics, the 6-step pipeline (#product), a pricing
  * teaser and a final CTA. Sign in / Sign up both go to /login; the auth'd
  * product screens under /app/* are untouched.
  *
- * The "live today" strip is REAL: it reads counts from the running demo
- * account (demo@dealflow.ai) via a server function, so the numbers match what
- * a signed-in visitor sees in the dashboard. No invented testimonials, no fake
- * social proof — just the working demo state.
+ * The public page never exposes customer metrics or private workspace data.
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { ReactNode } from "react";
-import { sql } from "~/db";
-import { scoreToBand, type LeadBand } from "~/lib/scoring";
 import {
   PublicFooter,
   PublicHeader,
 } from "~/components/public-header";
+import { PLANS, formatUsd } from "~/lib/plans";
 
 /* ---------------------------------------------------------------------- */
-/* Live demo metrics (public, read-only, scoped to the demo account)       */
+/* Product metrics are intentionally not exposed from customer data.       */
 /* ---------------------------------------------------------------------- */
 
 export interface LiveMetrics {
@@ -36,62 +32,10 @@ export interface LiveMetrics {
   appointments: number;
 }
 
-/** The app's own qualified bar — matches qualification.server.ts. */
-const QUALIFIED_TOTAL = 15;
-
 export const liveMetrics = createServerFn().handler(async () => {
-  const demo = (
-    await sql()`SELECT id FROM users WHERE email = 'demo@dealflow.ai'`
-  )[0];
-  if (!demo) {
-    return {
-      leads: 0,
-      hot: 0,
-      warm: 0,
-      nurture: 0,
-      low: 0,
-      conversations: 0,
-      qualified: 0,
-      appointments: 0,
-    } satisfies LiveMetrics;
-  }
-  const userId = Number(demo.id);
-
-  const scoreRows = await sql()`
-    SELECT lead_score FROM leads
-    WHERE user_id = ${userId} AND lead_score IS NOT NULL
-  `;
-  const bands: Record<LeadBand, number> = { HOT: 0, WARM: 0, NURTURE: 0, LOW: 0 };
-  for (const row of scoreRows) {
-    const band = scoreToBand(Number(row.lead_score));
-    if (band) bands[band] += 1;
-  }
-
-  const [conv] = await sql()`
-    SELECT COUNT(*) AS c FROM conversations cv
-    JOIN leads l ON l.id = cv.lead_id
-    WHERE l.user_id = ${userId}
-  `;
-  const [qual] = await sql()`
-    SELECT COUNT(*) AS c FROM qualification q
-    JOIN leads l ON l.id = q.lead_id
-    WHERE l.user_id = ${userId} AND q.total_score >= ${QUALIFIED_TOTAL}
-  `;
-  const [appts] = await sql()`
-    SELECT COUNT(*) AS c FROM appointments a
-    JOIN leads l ON l.id = a.lead_id
-    WHERE l.user_id = ${userId}
-  `;
-
   return {
-    leads: scoreRows.length,
-    hot: bands.HOT,
-    warm: bands.WARM,
-    nurture: bands.NURTURE,
-    low: bands.LOW,
-    conversations: Number(conv?.c ?? 0),
-    qualified: Number(qual?.c ?? 0),
-    appointments: Number(appts?.c ?? 0),
+    leads: 0, hot: 0, warm: 0, nurture: 0, low: 0,
+    conversations: 0, qualified: 0, appointments: 0,
   } satisfies LiveMetrics;
 });
 
@@ -173,7 +117,7 @@ function Hero() {
             to="/login"
             className="w-full rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 sm:w-auto"
           >
-            Sign up — try the demo
+            Start your free trial
           </Link>
           <Link
             to="/pricing"
@@ -184,7 +128,7 @@ function Hero() {
         </div>
 
         <p className="mt-6 text-xs text-gray-400 dark:text-gray-500">
-          Free to sign up · Upload your own CSV · Demo account ready in seconds
+          Free trial · Upload your own CSV · Set up in minutes
         </p>
       </div>
     </section>
@@ -204,10 +148,10 @@ function LiveToday({ metrics }: { metrics: LiveMetrics }) {
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
         <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
           <p className="text-sm font-semibold text-gray-900 dark:text-white">
-            Live today — from the running demo pipeline
+            Your lead pipeline, in one place
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Sign in with the demo account to see it live in the dashboard.
+            Create your workspace to score and manage your first leads.
           </p>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -348,53 +292,6 @@ function HowItWorks() {
   );
 }
 
-interface Tier {
-  name: string;
-  price: string;
-  blurb: string;
-  features: string[];
-  highlighted?: boolean;
-}
-
-const tiers: Tier[] = [
-  {
-    name: "Starter",
-    price: "$299",
-    blurb: "For investors getting their pipeline moving.",
-    features: [
-      "250 leads per month",
-      "AI qualification",
-      "Basic follow-up",
-      "Dashboard & lead scoring",
-    ],
-  },
-  {
-    name: "Pro",
-    price: "$799",
-    blurb: "For active investors who want the full pipeline.",
-    features: [
-      "1,000 leads per month",
-      "AI seller conversations",
-      "Appointment booking",
-      "Deal analysis",
-      "Analytics",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Investor+",
-    price: "$1,499",
-    blurb: "For investors running multiple campaigns.",
-    features: [
-      "2,500 leads per month",
-      "Multiple campaigns",
-      "Advanced qualification",
-      "Priority support",
-      "Multiple users",
-    ],
-  },
-];
-
 function PricingTeaser() {
   return (
     <section className="border-t border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/50">
@@ -411,13 +308,13 @@ function PricingTeaser() {
 
         <div className="mx-auto mt-8 max-w-2xl rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-center dark:border-blue-900 dark:bg-blue-950/50">
           <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
-            Founding-customer offer: the first 5 customers get $299/month locked
+            Founding-customer offer: the first 10 customers get $29/month locked
             for 12 months — on any plan.
           </p>
         </div>
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
-          {tiers.map((tier) => (
+          {PLANS.map((tier) => (
             <div
               key={tier.name}
               className={`relative flex flex-col rounded-2xl border bg-white p-7 shadow-sm dark:bg-gray-900 ${
@@ -439,7 +336,7 @@ function PricingTeaser() {
               </p>
               <p className="mt-5 flex items-baseline gap-1">
                 <span className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
-                  {tier.price}
+                  {formatUsd(tier.monthlyUsd)}
                 </span>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   /month
@@ -493,14 +390,14 @@ function FinalCTA() {
           Sign up and run it on your own leads
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-lg text-gray-400">
-          Create a free account, upload a CSV, and watch your first seller
-          conversations start. No credit card, no setup call.
+          Create your workspace, upload a CSV, and start organizing your seller
+          conversations. No setup call required.
         </p>
         <Link
           to="/login"
           className="mt-8 inline-block rounded-lg bg-blue-500 px-7 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-400"
         >
-          Sign up — try the demo
+          Start your free trial
         </Link>
       </div>
     </section>

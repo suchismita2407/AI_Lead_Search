@@ -5,11 +5,6 @@ import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  // Bun built-ins must stay external in the SSR/RSC bundle — Rollup can't
-  // resolve them and the runtime (Bun) resolves them natively.
-  ssr: {
-    external: ["bun:sqlite"],
-  },
   server: {
     port: 3000,
     host: true,

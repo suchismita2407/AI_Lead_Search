@@ -11,6 +11,7 @@ import {
   PublicFooter,
   PublicHeader,
 } from "~/components/public-header";
+import { PLANS, formatUsd } from "~/lib/plans";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -18,56 +19,6 @@ export const Route = createFileRoute("/pricing")({
   }),
   component: PricingPage,
 });
-
-interface Tier {
-  name: string;
-  price: string;
-  blurb: string;
-  features: string[];
-  highlighted?: boolean;
-}
-
-const tiers: Tier[] = [
-  {
-    name: "Starter",
-    price: "$299",
-    blurb: "For investors getting their pipeline moving.",
-    features: [
-      "250 leads per month",
-      "AI qualification",
-      "Basic follow-up",
-      "Dashboard & lead scoring",
-      "CSV lead upload with dedupe",
-    ],
-  },
-  {
-    name: "Pro",
-    price: "$799",
-    blurb: "For active investors who want the full pipeline.",
-    features: [
-      "1,000 leads per month",
-      "AI seller conversations",
-      "Appointment booking",
-      "Deal analysis",
-      "Analytics",
-      "CSV lead upload with dedupe",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Investor+",
-    price: "$1,499",
-    blurb: "For investors running multiple campaigns.",
-    features: [
-      "2,500 leads per month",
-      "Multiple campaigns",
-      "Advanced qualification",
-      "Priority support",
-      "Multiple users",
-      "Everything in Pro",
-    ],
-  },
-];
 
 function PricingPage() {
   return (
@@ -87,13 +38,13 @@ function PricingPage() {
 
           <div className="mx-auto mt-8 max-w-2xl rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-center dark:border-blue-900 dark:bg-blue-950/50">
             <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
-              Founding-customer offer: the first 5 customers get $299/month
+              Founding-customer offer: the first 10 customers get $29/month
               locked for 12 months — on any plan.
             </p>
           </div>
 
           <div className="mt-12 grid gap-6 lg:grid-cols-3">
-            {tiers.map((tier) => (
+            {PLANS.map((tier) => (
               <div
                 key={tier.name}
                 className={`relative flex flex-col rounded-2xl border bg-white p-7 shadow-sm dark:bg-gray-900 ${
@@ -115,7 +66,7 @@ function PricingPage() {
                 </p>
                 <p className="mt-5 flex items-baseline gap-1">
                   <span className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
-                    {tier.price}
+                    {formatUsd(tier.monthlyUsd)}
                   </span>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
                     /month
@@ -158,9 +109,7 @@ function PricingPage() {
           </div>
 
           <p className="mx-auto mt-8 max-w-xl text-center text-sm text-gray-500 dark:text-gray-400">
-            Free to sign up today — payment setup is coming online soon, so
-            there's no checkout and no card required. Your demo account works on
-            every tier.
+            Start with a 14-day trial. You only pay after selecting a plan.
           </p>
         </section>
       </main>

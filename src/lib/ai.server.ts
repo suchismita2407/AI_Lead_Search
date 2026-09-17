@@ -26,6 +26,7 @@ export interface ChatMessage {
 }
 
 export const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+export const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 /** Persona + safety constraints for the seller assistant (both modes). */
 export const SELLER_ASSISTANT_SYSTEM_PROMPT = `You are DealFlow AI's seller assistant, working for a real-estate investor who buys residential properties directly from owners.
@@ -58,12 +59,12 @@ export function buildSystemPrompt(aiInstructions?: string | null): string {
 
 /** GPT model — env-overridable, defaults to the cheap-but-capable mini. */
 export function chatModel(): string {
-  return process.env.AI_MODEL || "gpt-4o-mini";
+  return process.env.AI_MODEL || (process.env.AI_PROVIDER === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini");
 }
 
-/** True when no OPENAI_API_KEY is set → the scripted seller drives the demo. */
+/** True when no configured provider key is set → deterministic simulation mode. */
 export function isSimulatedMode(): boolean {
-  return !process.env.OPENAI_API_KEY;
+  return process.env.AI_PROVIDER === "groq" ? !process.env.GROQ_API_KEY : !process.env.OPENAI_API_KEY;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -78,9 +79,10 @@ export async function openAiChatCompletion(
   messages: ChatMessage[],
   opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
-  const response = await fetch(OPENAI_CHAT_URL, {
+  const groq = process.env.AI_PROVIDER === "groq";
+  const apiKey = groq ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error(groq ? "GROQ_API_KEY is not set" : "OPENAI_API_KEY is not set");
+  const response = await fetch(groq ? GROQ_CHAT_URL : OPENAI_CHAT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

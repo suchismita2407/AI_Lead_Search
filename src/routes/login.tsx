@@ -19,12 +19,14 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [company, setCompany] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res =
         mode === "signin"
@@ -34,10 +36,20 @@ function LoginPage() {
         setError(res.error);
         return;
       }
+      if ("requiresVerification" in res && res.requiresVerification) {
+        setNotice("Check your inbox to verify your email, then sign in.");
+        setMode("signin");
+        return;
+      }
       await router.invalidate();
       await router.navigate({ to: "/app/dashboard" });
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setError(
+        message.includes("DATABASE_URL")
+          ? "The local database is not configured yet. Add DATABASE_URL and SESSION_SECRET to a .env file, then restart the server."
+          : "We could not complete that request. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -184,6 +196,11 @@ function LoginPage() {
                 {error}
               </p>
             )}
+            {notice && (
+              <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+                {notice}
+              </p>
+            )}
 
             <button
               type="submit"
@@ -200,8 +217,7 @@ function LoginPage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
-          Demo account — email <span className="font-medium">demo@dealflow.ai</span>,
-          password <span className="font-medium">demo1234</span>
+          New accounts must verify their email before accessing a workspace.
         </p>
       </div>
     </main>
