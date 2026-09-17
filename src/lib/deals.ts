@@ -39,3 +39,14 @@ export const deleteDeal = createServerFn({ method: "POST" })
     const { deleteDealForUser } = await import("./deals.server");
     return await deleteDealForUser(data.id);
   });
+
+/** Plain-English Groq review of the current deal assumptions. */
+export const analyzeDealWithAi = createServerFn({ method: "POST" })
+  .validator((d: {
+    purchase: number | null; rehab: number | null; closing: number | null;
+    holding: number | null; selling: number | null; arv: number | null;
+  }) => d)
+  .handler(async ({ data }) => {
+    const { reviewDealWithAi } = await import("./deal-analysis.server");
+    return await reviewDealWithAi(data);
+  });

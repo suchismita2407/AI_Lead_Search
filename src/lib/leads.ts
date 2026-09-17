@@ -22,6 +22,19 @@ export const importLeadsCsv = createServerFn({ method: "POST" })
     return await importLeadsCsvData(data.csv);
   });
 
+/** Add one manually sourced lead and calculate its screening score. */
+export const createLead = createServerFn({ method: "POST" })
+  .validator((d: {
+    ownerName?: string; address: string; city: string; state: string; zip?: string;
+    propertyType?: string; estimatedValue?: number | null; estimatedEquity?: number | null;
+    ownershipYears?: number | null; vacancy?: boolean; needsWork?: boolean;
+    distress?: boolean; absenteeOwner?: boolean; listingWithdrawal?: boolean;
+  }) => d)
+  .handler(async ({ data }) => {
+    const { createLeadForUser } = await import("./leads.server");
+    return await createLeadForUser(data);
+  });
+
 /** All leads for the current user (newest first) — archived leads excluded. */
 export const listLeads = createServerFn().handler(async () => {
   const { listLeadsForUser } = await import("./leads.server");

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { listDeals, saveDeal, deleteDeal } from "~/lib/deals";
+import { analyzeDealWithAi, listDeals, saveDeal, deleteDeal } from "~/lib/deals";
 import type { SavedDeal } from "~/lib/deals";
 import { listLeads } from "~/lib/leads";
 import type { LeadListItem } from "~/lib/leads";
@@ -99,6 +99,9 @@ function AnalyzerPage() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const result = computeDeal({
     purchase: parseAmount(purchase),
@@ -168,6 +171,25 @@ function AnalyzerPage() {
       setSaveError("Delete failed — try again.");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleAiReview() {
+    if (!result.complete || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiSummary(null);
+    try {
+      const review = await analyzeDealWithAi({ data: {
+        purchase: parseAmount(purchase), rehab: parseAmount(rehab), closing: parseAmount(closing),
+        holding: parseAmount(holding), selling: parseAmount(selling), arv: parseAmount(arv),
+      } });
+      if ("error" in review) setAiError(review.error);
+      else setAiSummary(review.summary);
+    } catch {
+      setAiError("Could not get an AI review. Please try again.");
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -336,6 +358,23 @@ function AnalyzerPage() {
               ESTIMATE — not a guarantee. Numbers are your inputs; profit and
               ROI are projections, not promises.
             </p>
+
+            <button
+              type="button"
+              onClick={handleAiReview}
+              disabled={!result.complete || aiLoading}
+              className="mt-4 w-full rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {aiLoading ? "Reviewing deal…" : "Ask AI: Should I proceed?"}
+            </button>
+            {!result.complete ? <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Enter purchase price and ARV first.</p> : null}
+            {aiError ? <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{aiError}</p> : null}
+            {aiSummary ? (
+              <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-gray-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-gray-200">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">AI deal review</p>
+                <div className="whitespace-pre-wrap">{aiSummary}</div>
+              </div>
+            ) : null}
 
             {result.complete ? (
               <dl className="mt-4 space-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-800/60 dark:text-gray-300">

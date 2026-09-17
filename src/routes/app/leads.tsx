@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { importLeadsCsv, listArchivedLeads, listLeads } from "~/lib/leads";
+import { createLead, importLeadsCsv, listArchivedLeads, listLeads } from "~/lib/leads";
 import type { ImportLeadsResult } from "~/lib/leads";
 import { BANDS } from "~/lib/scoring";
 import type { LeadBand } from "~/lib/scoring";
@@ -41,6 +41,10 @@ function LeadsPage() {
   const [fileLabel, setFileLabel] = useState<string | null>(null);
   const [tab, setTab] = useState<LeadBand | "ALL" | "ARCHIVED">("ALL");
   const [query, setQuery] = useState("");
+  const [showAddLead, setShowAddLead] = useState(false);
+  const [addingLead, setAddingLead] = useState(false);
+  const [addLeadError, setAddLeadError] = useState<string | null>(null);
+  const [singleLead, setSingleLead] = useState({ ownerName: "", address: "", city: "", state: "", zip: "", propertyType: "", estimatedValue: "", estimatedEquity: "", ownershipYears: "", vacancy: false, needsWork: false, distress: false, absenteeOwner: false, listingWithdrawal: false });
 
   const counts = BANDS.reduce<Record<LeadBand, number>>(
     (acc, band) => {
@@ -75,6 +79,37 @@ function LeadsPage() {
     setFileLabel(file ? file.name : null);
   }
 
+  function numberOrNull(value: string) {
+    if (!value.trim()) return null;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  }
+
+  async function handleAddLead(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (addingLead) return;
+    setAddingLead(true);
+    setAddLeadError(null);
+    try {
+      const res = await createLead({ data: {
+        ...singleLead,
+        estimatedValue: numberOrNull(singleLead.estimatedValue),
+        estimatedEquity: numberOrNull(singleLead.estimatedEquity),
+        ownershipYears: numberOrNull(singleLead.ownershipYears),
+      } });
+      if ("error" in res) setAddLeadError(res.error);
+      else {
+        setSingleLead({ ownerName: "", address: "", city: "", state: "", zip: "", propertyType: "", estimatedValue: "", estimatedEquity: "", ownershipYears: "", vacancy: false, needsWork: false, distress: false, absenteeOwner: false, listingWithdrawal: false });
+        setShowAddLead(false);
+        await router.invalidate();
+      }
+    } catch {
+      setAddLeadError("Could not add the lead. Try again.");
+    } finally {
+      setAddingLead(false);
+    }
+  }
+
   const source = tab === "ARCHIVED" ? archived : leads;
   const filtered = source.filter((lead) => {
     if (tab !== "ALL" && tab !== "ARCHIVED" && lead.band !== tab) {
@@ -99,14 +134,37 @@ function LeadsPage() {
             the hot ones first.
           </p>
         </div>
-        <a
-          href="/sample-leads.csv"
-          download="sample-leads.csv"
-          className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
-        >
-          ↓ Download sample CSV
-        </a>
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={() => { setShowAddLead((value) => !value); setAddLeadError(null); }} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            {showAddLead ? "Close form" : "+ Add single lead"}
+          </button>
+          <a href="/sample-leads.csv" download="sample-leads.csv" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400">↓ Download sample CSV</a>
+        </div>
       </div>
+
+      {showAddLead ? (
+        <form onSubmit={handleAddLead} className="mt-5 rounded-xl border border-blue-200 bg-blue-50/50 p-5 dark:border-blue-900/60 dark:bg-blue-950/20">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Add one lead</h2>
+          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Enter only information you lawfully collected or the owner provided. Screening flags are your hypotheses, not verified facts.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {([['ownerName','Owner name','Jane Smith'], ['address','Property address *','123 Main St'], ['city','City *','Austin'], ['state','State *','TX'], ['zip','ZIP code','78701'], ['propertyType','Property type','Single-family']] as const).map(([key, label, placeholder]) => (
+              <label key={key} className="text-xs font-medium text-gray-600 dark:text-gray-300">{label}
+                <input value={singleLead[key]} onChange={(e) => setSingleLead((value) => ({ ...value, [key]: e.target.value }))} placeholder={placeholder} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+              </label>
+            ))}
+            {([['estimatedValue','Estimated value'], ['estimatedEquity','Estimated equity'], ['ownershipYears','Years owned']] as const).map(([key, label]) => (
+              <label key={key} className="text-xs font-medium text-gray-600 dark:text-gray-300">{label}
+                <input type="number" min="0" value={singleLead[key]} onChange={(e) => setSingleLead((value) => ({ ...value, [key]: e.target.value }))} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+              </label>
+            ))}
+          </div>
+          <fieldset className="mt-4"><legend className="text-xs font-semibold text-gray-600 dark:text-gray-300">Your screening observations</legend><div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+            {([['vacancy','Vacant'], ['needsWork','Needs work'], ['distress','Distress signal'], ['absenteeOwner','Absentee owner'], ['listingWithdrawal','Recent listing withdrawal']] as const).map(([key,label]) => <label key={key} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300"><input type="checkbox" checked={singleLead[key]} onChange={(e) => setSingleLead((value) => ({ ...value, [key]: e.target.checked }))} />{label}</label>)}
+          </div></fieldset>
+          {addLeadError ? <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{addLeadError}</p> : null}
+          <button disabled={addingLead} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{addingLead ? "Adding…" : "Add and score lead"}</button>
+        </form>
+      ) : null}
 
       {/* Upload control */}
       <div className="mt-5 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">

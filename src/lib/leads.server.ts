@@ -320,3 +320,46 @@ export async function setLeadArchivedForUser(
   `;
   return { archived };
 }
+
+export type CreateLeadInput = {
+  ownerName?: string; address: string; city: string; state: string; zip?: string;
+  propertyType?: string; estimatedValue?: number | null; estimatedEquity?: number | null;
+  ownershipYears?: number | null; vacancy?: boolean; needsWork?: boolean;
+  distress?: boolean; absenteeOwner?: boolean; listingWithdrawal?: boolean;
+};
+
+const trimField = (value: unknown, max: number): string | null => {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, max) : null;
+};
+
+const safeAmount = (value: unknown): number | null => {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+/** Create one user-supplied lead. Signals are investor hypotheses, not web claims. */
+export async function createLeadForUser(input: CreateLeadInput): Promise<{ lead: LeadListItem } | { error: string }> {
+  const user = await requireUser();
+  const address = trimField(input.address, 300);
+  const city = trimField(input.city, 100);
+  const state = trimField(input.state, 80);
+  if (!address || !city || !state) return { error: "Property address, city, and state are required." };
+  const owner = trimField(input.ownerName, 200);
+  const existing = await sql()`SELECT id FROM leads WHERE user_id = ${user.id} AND lower(property_address) = lower(${address}) LIMIT 1`;
+  if (existing[0]) return { error: "A lead with this property address already exists." };
+  const scoreInput = {
+    ownership_duration_years: safeAmount(input.ownershipYears), estimated_value: safeAmount(input.estimatedValue), estimated_equity: safeAmount(input.estimatedEquity),
+    vacancy_signal: input.vacancy ? 1 : 0, needs_work_signal: input.needsWork ? 1 : 0,
+    distress_signal: input.distress ? 1 : 0, absentee_owner_signal: input.absenteeOwner ? 1 : 0,
+    recent_listing_withdrawal_signal: input.listingWithdrawal ? 1 : 0,
+  } as const;
+  const scored = computeSignals(scoreInput);
+  const id = await sql().insert`
+    INSERT INTO leads (user_id, owner_name, property_address, city, state, zip, property_type, estimated_value, estimated_equity, ownership_duration_years, vacancy_signal, needs_work_signal, distress_signal, absentee_owner_signal, recent_listing_withdrawal_signal, lead_score, signals_json, status)
+    VALUES (${user.id}, ${owner}, ${address}, ${city}, ${state}, ${trimField(input.zip, 20)}, ${trimField(input.propertyType, 100)}, ${scoreInput.estimated_value}, ${scoreInput.estimated_equity}, ${scoreInput.ownership_duration_years}, ${scoreInput.vacancy_signal}, ${scoreInput.needs_work_signal}, ${scoreInput.distress_signal}, ${scoreInput.absentee_owner_signal}, ${scoreInput.recent_listing_withdrawal_signal}, ${scored.score}, ${JSON.stringify(scored.signals)}, 'new')
+  `;
+  const [row] = await sql()`SELECT * FROM leads WHERE id = ${id} AND user_id = ${user.id}`;
+  return row ? { lead: toLeadListItem(row) } : { error: "Could not save this lead. Try again." };
+}
