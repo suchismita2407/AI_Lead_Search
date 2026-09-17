@@ -1,5 +1,4 @@
 {
   "framework": null,
-  "buildCommand": "npm run build",
-  "functions": { "render.func/index.mjs": { "maxDuration": 30 } }
+  "buildCommand": "npm run build:vercel"
 }
