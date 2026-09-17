@@ -25,3 +25,4 @@ src/routeTree.gen.ts
 *.db
 *.db-wal
 *.db-shm
+.vercel
