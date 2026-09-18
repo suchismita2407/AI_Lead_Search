@@ -37,22 +37,22 @@ function AppLayout() {
   }
 
   const navItems = [
-    { to: "/app/dashboard", label: "Dashboard" },
-    { to: "/app/leads", label: "Leads" },
-    { to: "/app/campaigns", label: "Campaigns" },
-    { to: "/app/analyzer", label: "Deal Analyzer" },
-    { to: "/app/settings", label: "Settings" },
+    { to: "/app/dashboard", label: "Dashboard", icon: "◈" },
+    { to: "/app/leads", label: "Leads", icon: "⌘" },
+    { to: "/app/campaigns", label: "Campaigns", icon: "◎" },
+    { to: "/app/analyzer", label: "Deal Analyzer", icon: "✦" },
+    { to: "/app/settings", label: "Settings", icon: "⚙" },
   ] as const;
 
   const linkCls =
-    "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100";
+    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-white/7 hover:text-white";
   const linkActiveCls =
-    "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white";
+    "bg-gradient-to-r from-cyan-400/15 to-violet-500/15 text-white ring-1 ring-inset ring-white/8";
 
   return (
-    <div className="flex min-h-dvh bg-gray-50 dark:bg-gray-950">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-gray-200 px-5 dark:border-gray-800">
+    <div className="app-shell flex min-h-dvh">
+      <aside className="app-sidebar flex w-64 shrink-0 flex-col border-r border-white/8">
+        <div className="flex h-20 shrink-0 items-center gap-3 border-b border-white/8 px-5">
           <svg
             aria-hidden
             viewBox="0 0 24 24"
@@ -61,15 +61,13 @@ function AppLayout() {
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="h-5 w-5 text-blue-600 dark:text-blue-400"
+            className="h-8 w-8 rounded-xl bg-cyan-400/10 p-1.5 text-cyan-300 ring-1 ring-cyan-300/20"
           >
             <circle cx="12" cy="12" r="10" />
             <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
             <path d="M2 12h20" />
           </svg>
-          <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
-            DealFlow AI
-          </span>
+          <span className="text-base font-bold tracking-tight text-white">DealFlow <span className="text-cyan-300">AI</span></span>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
@@ -80,23 +78,23 @@ function AppLayout() {
               className={linkCls}
               activeProps={{ className: `${linkCls} ${linkActiveCls}` }}
             >
-              {item.label}
+              <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/5 text-xs text-cyan-200">{item.icon}</span>{item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="shrink-0 border-t border-gray-200 p-4 dark:border-gray-800">
-          <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+        <div className="m-3 shrink-0 rounded-2xl border border-white/8 bg-white/4 p-3">
+          <p className="truncate text-sm font-medium text-white">
             {user.name}
           </p>
-          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+          <p className="truncate text-xs text-slate-400">
             {user.email}
           </p>
           <button
             type="button"
             onClick={handleLogout}
             disabled={signingOut}
-            className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            className="mt-3 w-full rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {signingOut ? "Signing out…" : "Sign out"}
           </button>
@@ -104,7 +102,7 @@ function AppLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+        <main className="app-main flex-1 overflow-y-auto p-5 lg:p-9">
           <Outlet />
         </main>
       </div>

@@ -194,31 +194,37 @@ function AnalyzerPage() {
   }
 
   const inputCls =
-    "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100";
+    "premium-input w-full rounded-xl border px-3 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none";
+
+  function reviewBlocks(text: string) {
+    return text.split(/\n(?=###\s)/).map((block, index) => {
+      const lines = block.trim().split("\n");
+      const title = lines[0]?.replace(/^###\s*/, "") || "Review";
+      return <section key={`${title}-${index}`}><h3>{title}</h3><p>{lines.slice(1).join("\n").replace(/\*\*/g, "")}</p></section>;
+    });
+  }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-        Deal Analyzer
-      </h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Model a flip or wholesale deal: purchase price, rehab, ARV and
-        estimated profit.
-      </p>
+    <div className="page-enter mx-auto max-w-6xl">
+      <section className="property-hero rounded-3xl border border-white/10 px-6 py-8 shadow-2xl lg:px-9 lg:py-10">
+        <div className="relative z-10 max-w-xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100"><span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_12px_#67e8f9]" /> INTELLIGENT UNDERWRITING</div>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-white lg:text-4xl">Know your move <span className="text-cyan-300">before</span> you make an offer.</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Turn property assumptions into a clear flip, wholesale, or buy-and-hold decision—with an AI second opinion in plain English.</p>
+        </div>
+      </section>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         {/* Inputs */}
-        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 lg:col-span-3">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-            Deal inputs
-          </h2>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        <section className="glass-card rounded-3xl p-5 lg:col-span-3 lg:p-7">
+          <h2 className="text-lg font-semibold text-white">Deal inputs</h2>
+          <p className="mt-1 text-xs text-slate-400">
             Purchase price and ARV are required; the rest default to $0 when
             left blank.
           </p>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold uppercase tracking-[.12em] text-cyan-100/70">
                 Purchase price <span className="text-red-500">*</span>
               </span>
               <input
@@ -233,7 +239,7 @@ function AnalyzerPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold uppercase tracking-[.12em] text-cyan-100/70">
                 ARV <span className="text-red-500">*</span>
               </span>
               <input
@@ -248,7 +254,7 @@ function AnalyzerPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold uppercase tracking-[.12em] text-cyan-100/70">
                 Rehab
               </span>
               <input
@@ -263,7 +269,7 @@ function AnalyzerPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold uppercase tracking-[.12em] text-cyan-100/70">
                 Closing costs
               </span>
               <input
@@ -278,7 +284,7 @@ function AnalyzerPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold uppercase tracking-[.12em] text-cyan-100/70">
                 Holding costs
               </span>
               <input
@@ -293,7 +299,7 @@ function AnalyzerPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-semibold uppercase tracking-[.12em] text-cyan-100/70">
                 Selling costs
               </span>
               <input
@@ -312,9 +318,9 @@ function AnalyzerPage() {
 
         {/* Results */}
         <section className="lg:col-span-2">
-          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <div className="glass-card rounded-3xl p-5 lg:p-6">
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-white">
                 Deal summary
               </h2>
               {result.recommendation ? (
@@ -327,8 +333,8 @@ function AnalyzerPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <ResultCard label="Total cost" value={totalText} />
-              <ResultCard
+              <div className="metric-card rounded-2xl border border-white/8 bg-white/4 p-4"><ResultCard label="Total cost" value={totalText} /></div>
+              <div className="metric-card rounded-2xl border border-white/8 bg-white/4 p-4"><ResultCard
                 label="Estimated profit"
                 value={profitText}
                 accent={
@@ -336,9 +342,9 @@ function AnalyzerPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : "text-red-600 dark:text-red-400"
                 }
-              />
-              <ResultCard label="ROI" value={roiText} />
-              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+              /></div>
+              <div className="metric-card rounded-2xl border border-white/8 bg-white/4 p-4"><ResultCard label="ROI" value={roiText} /></div>
+              <div className="metric-card rounded-2xl border border-white/8 bg-white/4 p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Deal score
                 </p>
@@ -363,16 +369,16 @@ function AnalyzerPage() {
               type="button"
               onClick={handleAiReview}
               disabled={!result.complete || aiLoading}
-              className="mt-4 w-full rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ai-button mt-4 w-full rounded-xl px-3 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {aiLoading ? "Reviewing deal…" : "Ask AI: Should I proceed?"}
             </button>
             {!result.complete ? <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Enter purchase price and ARV first.</p> : null}
             {aiError ? <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{aiError}</p> : null}
             {aiSummary ? (
-              <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-gray-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-gray-200">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">AI deal review</p>
-                <div className="whitespace-pre-wrap">{aiSummary}</div>
+              <div className="ai-review mt-4 rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-950/50 to-violet-950/35 p-5 text-sm leading-6 text-slate-200 shadow-inner">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[.14em] text-cyan-200">✦ AI deal review</p>
+                <div className="whitespace-pre-wrap">{reviewBlocks(aiSummary)}</div>
               </div>
             ) : null}
 

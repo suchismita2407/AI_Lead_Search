@@ -64,28 +64,28 @@ function Dashboard() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-        Dashboard
-      </h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Pipeline snapshot for your seller leads. Bands come from the shared
-        scoring bands (hot 80+, warm 60+, nurture 40+, below that low).
-      </p>
+    <div className="page-enter mx-auto max-w-6xl">
+      <section className="property-hero rounded-3xl border border-white/10 px-6 py-8 shadow-2xl lg:px-9">
+        <div className="relative z-10 max-w-xl">
+          <p className="text-xs font-bold uppercase tracking-[.18em] text-cyan-200">Your acquisition command center</p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">Find momentum. <span className="text-cyan-300">Close smarter.</span></h1>
+          <p className="mt-2 text-sm leading-6 text-slate-200">A live view of the sellers and opportunities that deserve your next move.</p>
+        </div>
+      </section>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="glass-card metric-card rounded-2xl p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Leads
           </p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums text-gray-900 dark:text-white">
+          <p className="mt-2 text-3xl font-semibold tabular-nums text-white">
             {stats.total}
           </p>
         </div>
         {bandCards.map((card) => (
           <div
             key={card.band}
-            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            className="glass-card metric-card rounded-2xl p-4"
           >
             <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
               {card.band}
@@ -97,7 +97,7 @@ function Dashboard() {
             </p>
           </div>
         ))}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="glass-card metric-card rounded-2xl p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Appointments
           </p>
@@ -107,9 +107,9 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8 rounded-xl border border-dashed border-gray-300 p-6 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-        The AI seller conversation qualifies hot leads and hands qualified
-        sellers to you to book calls. Open a lead to start a conversation.
+      <div className="glass-card mt-8 rounded-3xl p-6 text-sm text-slate-300">
+        <p className="text-xs font-bold uppercase tracking-[.14em] text-cyan-200">Next best move</p>
+        <p className="mt-2">Open a high-intent lead, start a seller conversation, then use the Deal Analyzer before you make an offer.</p>
       </div>
     </div>
   );
