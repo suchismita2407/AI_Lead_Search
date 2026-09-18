@@ -7,7 +7,7 @@
  * `./leads.ts`, whose handlers dynamically import this module.
  */
 import { sql } from "~/db";
-import { requireUser } from "./auth.server";
+import { getWorkspaceAccessForUser, requireWorkspaceAccess } from "./auth.server";
 import { parseLeadsCsv } from "./csv.server";
 import {
   computeSignals,
@@ -97,7 +97,7 @@ function toLeadListItem(row: Record<string, unknown>): LeadListItem {
  * conversation, booking) and via the Archived tab on this page.
  */
 export async function listLeadsForUser(): Promise<LeadListItem[]> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const rows = await sql()`
     SELECT * FROM leads
     WHERE user_id = ${user.id} AND archived <> 1
@@ -108,7 +108,7 @@ export async function listLeadsForUser(): Promise<LeadListItem[]> {
 
 /** Only archived leads for the current user (the Archived list tab). */
 export async function listArchivedLeadsForUser(): Promise<LeadListItem[]> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const rows = await sql()`
     SELECT * FROM leads
     WHERE user_id = ${user.id} AND archived = 1
@@ -119,7 +119,7 @@ export async function listArchivedLeadsForUser(): Promise<LeadListItem[]> {
 
 /** Single lead for the current user, or null if not found / not theirs. */
 export async function getLeadForUser(id: number): Promise<LeadDetail | null> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const rows = await sql()`
     SELECT * FROM leads
     WHERE id = ${id} AND user_id = ${user.id}
@@ -166,13 +166,16 @@ const normKey = (s: string | null): string =>
 export async function importLeadsCsvData(
   csvText: string,
 ): Promise<ImportLeadsResult> {
-  const user = await requireUser();
-  const { rows, skipped } = parseLeadsCsv(csvText);
+  const user = await requireWorkspaceAccess();
+  const parsed = parseLeadsCsv(csvText);
+  const rows = parsed.rows;
+  let skipped = parsed.skipped;
 
   // Load the user's existing leads once, keyed for dedupe.
   const existing = await sql()`
     SELECT * FROM leads WHERE user_id = ${user.id}
   `;
+  const access = await getWorkspaceAccessForUser(user);
   const byKey = new Map<string, Record<string, unknown>>();
   for (const lead of existing) {
     const address = lead.property_address == null ? null : String(lead.property_address);
@@ -196,6 +199,10 @@ export async function importLeadsCsvData(
     const owner = row.owner_name;
     const key = address ? `a:${normKey(address)}` : `o:${normKey(owner ?? "")}`;
     const existingLead = byKey.get(key);
+    if (!existingLead && access.leadLimit !== null && existing.length + inserted >= access.leadLimit) {
+      skipped += 1;
+      continue;
+    }
 
     if (existingLead) {
       await sql().run`
@@ -271,7 +278,7 @@ export async function setLeadHotForUser(
   leadId: number,
   hot: boolean,
 ): Promise<{ flagged_hot: boolean } | null> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   if (!(await ownedLead(leadId, user.id))) return null;
   await sql().run`
     UPDATE leads SET flagged_hot = ${hot ? 1 : 0}
@@ -288,7 +295,7 @@ export async function setLeadNoteForUser(
   leadId: number,
   rawNote: string,
 ): Promise<{ error: string } | { note: string } | null> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   if (!(await ownedLead(leadId, user.id))) return null;
   const note = String(rawNote ?? "").trim();
   if (note.length > MAX_LEAD_NOTE_LENGTH) {
@@ -312,7 +319,7 @@ export async function setLeadArchivedForUser(
   leadId: number,
   archived: boolean,
 ): Promise<{ archived: boolean } | null> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   if (!(await ownedLead(leadId, user.id))) return null;
   await sql().run`
     UPDATE leads SET archived = ${archived ? 1 : 0}
@@ -341,7 +348,7 @@ const safeAmount = (value: unknown): number | null => {
 
 /** Create one user-supplied lead. Signals are investor hypotheses, not web claims. */
 export async function createLeadForUser(input: CreateLeadInput): Promise<{ lead: LeadListItem } | { error: string }> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const address = trimField(input.address, 300);
   const city = trimField(input.city, 100);
   const state = trimField(input.state, 80);
@@ -349,6 +356,11 @@ export async function createLeadForUser(input: CreateLeadInput): Promise<{ lead:
   const owner = trimField(input.ownerName, 200);
   const existing = await sql()`SELECT id FROM leads WHERE user_id = ${user.id} AND lower(property_address) = lower(${address}) LIMIT 1`;
   if (existing[0]) return { error: "A lead with this property address already exists." };
+  const access = await getWorkspaceAccessForUser(user);
+  if (access.leadLimit !== null) {
+    const [count] = await sql()`SELECT COUNT(*) AS total FROM leads WHERE user_id = ${user.id}`;
+    if (Number(count?.total ?? 0) >= access.leadLimit) return { error: `Your 3-day trial includes up to ${access.leadLimit} leads. Upgrade to add more.` };
+  }
   const scoreInput = {
     ownership_duration_years: safeAmount(input.ownershipYears), estimated_value: safeAmount(input.estimatedValue), estimated_equity: safeAmount(input.estimatedEquity),
     vacancy_signal: input.vacancy ? 1 : 0, needs_work_signal: input.needsWork ? 1 : 0,

@@ -6,13 +6,15 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 import { useState } from "react";
-import { getCurrentUser, logoutUser, type SessionUser } from "~/lib/auth";
+import { getCurrentUser, getWorkspaceAccess, logoutUser, type SessionUser } from "~/lib/auth";
 
 export const Route = createFileRoute("/app")({
   beforeLoad: async () => {
     const user = await getCurrentUser();
     if (!user) throw redirect({ to: "/login" });
-    return { user };
+    const access = await getWorkspaceAccess();
+    if (!access?.allowed) throw redirect({ to: "/pricing" });
+    return { user, access };
   },
   component: AppLayout,
 });
@@ -21,6 +23,7 @@ function AppLayout() {
   const { user } = Route.useRouteContext() as unknown as {
     user: SessionUser;
   };
+  const { access } = Route.useRouteContext() as unknown as { access: { status: string; trialEndsAt: string | null } };
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -71,6 +74,8 @@ function AppLayout() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+          {access.status === "trial" ? <div className="mb-3 rounded-xl border border-amber-300/15 bg-amber-300/8 px-3 py-2 text-xs text-amber-100"><span className="font-bold">3-day trial</span><br />Limited to 10 leads · {access.trialEndsAt ? `ends ${new Date(access.trialEndsAt).toLocaleDateString()}` : ""}</div> : null}
+          {access.status === "admin" ? <div className="mb-3 rounded-xl border border-cyan-300/15 bg-cyan-300/8 px-3 py-2 text-xs font-bold text-cyan-100">Admin workspace · full access</div> : null}
           {navItems.map((item) => (
             <Link
               key={item.to}

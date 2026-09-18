@@ -22,17 +22,15 @@ export const Route = createFileRoute("/pricing")({
 
 function PricingPage() {
   return (
-    <div className="min-h-dvh bg-white dark:bg-gray-950">
+    <div className="app-shell min-h-dvh text-white">
       <PublicHeader />
       <main>
         <section className="mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 sm:pb-24 sm:pt-20">
           <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl dark:text-white">
-              Pricing
-            </h1>
-            <p className="mt-4 text-lg text-gray-600 dark:text-gray-300">
-              One live product, three volume tiers. Every plan includes the full
-              pipeline — scoring, AI conversations, qualification and booking.
+            <p className="text-xs font-bold tracking-[.18em] text-cyan-300">SIMPLE, SERIOUS PRICING</p>
+            <h1 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">Start with 3 days. Stay when it pays for itself.</h1>
+            <p className="mt-4 text-lg text-slate-300">
+              Your trial includes up to 10 leads. Choose a plan after three days to keep your workspace and unlock higher limits.
             </p>
           </div>
 
@@ -47,7 +45,7 @@ function PricingPage() {
             {PLANS.map((tier) => (
               <div
                 key={tier.name}
-                className={`relative flex flex-col rounded-2xl border bg-white p-7 shadow-sm dark:bg-gray-900 ${
+                className={`glass-card relative flex flex-col rounded-3xl p-7 ${
                   tier.highlighted
                     ? "border-blue-500 ring-2 ring-blue-500/30 dark:border-blue-500"
                     : "border-gray-200 dark:border-gray-800"
@@ -58,14 +56,14 @@ function PricingPage() {
                     Most popular
                   </span>
                 )}
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-base font-semibold text-white">
                   {tier.name}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {tier.blurb}
                 </p>
                 <p className="mt-5 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
+                  <span className="text-4xl font-bold tracking-tight text-white">
                     {formatUsd(tier.monthlyUsd)}
                   </span>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -98,18 +96,18 @@ function PricingPage() {
                   to="/login"
                   className={`mt-7 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
                     tier.highlighted
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                      ? "ai-button text-white"
+                      : "border border-white/15 bg-white/5 text-white hover:bg-white/10"
                   }`}
                 >
-                  Sign up free
+                  Start 3-day trial
                 </Link>
               </div>
             ))}
           </div>
 
           <p className="mx-auto mt-8 max-w-xl text-center text-sm text-gray-500 dark:text-gray-400">
-            Start with a 14-day trial. You only pay after selecting a plan.
+            Trial access ends automatically after three days. Checkout activates once your payment provider is connected.
           </p>
         </section>
       </main>

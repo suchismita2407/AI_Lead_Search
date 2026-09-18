@@ -5,8 +5,8 @@ import { BANDS, scoreToBand } from "~/lib/scoring";
 import type { LeadBand } from "~/lib/scoring";
 
 export const dashboardStats = createServerFn().handler(async () => {
-  const { requireUser } = await import("~/lib/auth.server");
-  const user = await requireUser();
+  const { requireWorkspaceAccess } = await import("~/lib/auth.server");
+  const user = await requireWorkspaceAccess();
   const [counts] = await sql()`
     SELECT COUNT(*) AS total FROM leads WHERE user_id = ${user.id}
   `;

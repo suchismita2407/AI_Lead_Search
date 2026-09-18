@@ -11,7 +11,7 @@
  * this module.
  */
 import { sql } from "~/db";
-import { requireUser } from "./auth.server";
+import { requireWorkspaceAccess } from "./auth.server";
 import { computeDeal, type DealInputs } from "./analyzer";
 
 export interface SavedDeal {
@@ -68,7 +68,7 @@ function toSavedDeal(row: Record<string, unknown>): SavedDeal {
 
 /** All saved deals for the current user, newest first. */
 export async function listDealsForUser(): Promise<SavedDeal[]> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const rows = await sql()`
     SELECT d.id, d.lead_id, d.purchase_price, d.rehab, d.arv, d.closing_costs,
            d.holding_costs, d.selling_costs, d.estimated_profit, d.roi,
@@ -96,7 +96,7 @@ export async function saveDealForUser(input: {
   selling: number | null;
   arv: number | null;
 }): Promise<SaveDealResult> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const leadId = Number(input.leadId);
   if (!Number.isFinite(leadId) || leadId <= 0) {
     return { error: "Pick a lead to attach this deal to." };
@@ -147,7 +147,7 @@ export async function saveDealForUser(input: {
 
 /** Delete one of the user's saved deals. Returns false when it isn't theirs. */
 export async function deleteDealForUser(dealId: number): Promise<boolean> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const target = Number(dealId);
   if (!Number.isFinite(target)) return false;
   const result = await sql().run`

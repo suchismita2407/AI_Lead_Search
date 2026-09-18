@@ -11,7 +11,7 @@
  * import this module.
  */
 import { sql } from "~/db";
-import { requireUser } from "./auth.server";
+import { requireWorkspaceAccess } from "./auth.server";
 import {
   buildAiReply,
   buildOpeningMessage,
@@ -127,7 +127,7 @@ export async function startConversationForLead(leadId: number): Promise<
   | { messages: ConversationMessage[]; simulated: boolean; method: "started" | "exists" }
   | null
 > {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const lead = (await sql()`
     SELECT owner_name, city, state FROM leads
     WHERE id = ${leadId} AND user_id = ${user.id}
@@ -184,7 +184,7 @@ export async function sendSellerMessageForLead(
     }
   | null
 > {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const text = String(rawText ?? "").trim();
   if (!text) return { error: "Message can't be empty." };
   if (text.length > MAX_MESSAGE_LENGTH) {
@@ -243,7 +243,7 @@ export async function bookAppointmentForLead(
   | { appointment: AppointmentSnapshot; lead: LeadStatusSummary }
   | null
 > {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const date = String(dateStr ?? "").trim();
   const time = String(timeStr ?? "").trim();
   if (!DATE_RE.test(date) || !TIME_RE.test(time)) {

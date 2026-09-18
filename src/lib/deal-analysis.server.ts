@@ -1,12 +1,12 @@
 /** Server-only Groq deal review. Numbers are supplied by the investor, not verified market data. */
-import { requireUser } from "./auth.server";
+import { requireWorkspaceAccess } from "./auth.server";
 import { computeDeal, type DealInputs } from "./analyzer";
 import { openAiChatCompletion } from "./ai.server";
 
 export type DealAiReview = { summary: string } | { error: string };
 
 export async function reviewDealWithAi(inputs: DealInputs): Promise<DealAiReview> {
-  await requireUser();
+  await requireWorkspaceAccess();
   const result = computeDeal(inputs);
   if (!result.complete || result.totalCost === null || result.estimatedProfit === null || result.roi === null) {
     return { error: "Enter a purchase price and ARV before requesting an AI review." };

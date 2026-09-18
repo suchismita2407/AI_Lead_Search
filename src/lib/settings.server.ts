@@ -17,7 +17,7 @@
  * (inside the reply builder) — also server-only.
  */
 import { sql } from "~/db";
-import { requireUser } from "./auth.server";
+import { requireWorkspaceAccess } from "./auth.server";
 
 /** Per-field max lengths from the owner spec (validated on save). */
 export const SETTINGS_LIMITS = {
@@ -67,7 +67,7 @@ function toSettings(row: Record<string, unknown> | undefined): UserSettings {
 
 /** The session user's settings — defaults (all empty) when none saved yet. */
 export async function getSettingsForUser(): Promise<UserSettings> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
   const rows = await sql()`
     SELECT business_name, phone, business_email, calendar, messaging, ai_instructions
     FROM user_settings
@@ -95,7 +95,7 @@ export async function getAiInstructionsForUser(userId: number): Promise<string> 
 export async function saveSettingsForUser(
   input: SettingsInput,
 ): Promise<{ error: string } | { settings: UserSettings }> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
 
   const cleaned: UserSettings = { ...EMPTY_SETTINGS };
   for (const key of Object.keys(SETTINGS_LIMITS) as SettingsKey[]) {

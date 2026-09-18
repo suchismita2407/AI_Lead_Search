@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { loginUser, registerUser } from "~/lib/auth";
 
@@ -55,11 +55,11 @@ function LoginPage() {
     }
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500";
+  const inputCls = "premium-input w-full rounded-xl border px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none";
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-gray-50 px-4 py-10 dark:bg-gray-950">
+    <main className="app-shell relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
+      <Link to="/" className="absolute left-5 top-5 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 backdrop-blur hover:bg-white/10">← Back to home</Link>
       <div className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <svg
@@ -76,12 +76,10 @@ function LoginPage() {
             <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
             <path d="M2 12h20" />
           </svg>
-          <span className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
-            DealFlow AI
-          </span>
+          <span className="text-lg font-semibold tracking-tight text-white">DealFlow <span className="text-cyan-300">AI</span></span>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="glass-card rounded-3xl p-6 shadow-2xl">
           <div className="mb-5 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
             {(
               [
@@ -205,7 +203,7 @@ function LoginPage() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="ai-button w-full rounded-xl px-3 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy
                 ? "Please wait…"
@@ -217,7 +215,7 @@ function LoginPage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
-          New accounts must verify their email before accessing a workspace.
+          New accounts receive a limited 3-day trial after email verification.
         </p>
       </div>
     </main>

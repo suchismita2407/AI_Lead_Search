@@ -17,7 +17,7 @@
  * import this module.
  */
 import { sql } from "~/db";
-import { requireUser } from "./auth.server";
+import { requireWorkspaceAccess } from "./auth.server";
 import { QUALIFIED_TOTAL } from "./qualification.server";
 
 export interface CampaignStats {
@@ -30,7 +30,7 @@ export interface CampaignStats {
 
 /** Live pipeline counts for the current user's default campaign. */
 export async function campaignStatsForUser(): Promise<CampaignStats> {
-  const user = await requireUser();
+  const user = await requireWorkspaceAccess();
 
   const [totals] = await sql()`
     SELECT

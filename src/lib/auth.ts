@@ -9,6 +9,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export type { SessionUser } from "./auth.server";
+export type { WorkspaceAccess } from "./auth.server";
 
 export const getCurrentUser = createServerFn().handler(async () => {
   const { getSessionUser } = await import("./auth.server");
@@ -34,6 +35,11 @@ export const registerUser = createServerFn({ method: "POST" })
 export const logoutUser = createServerFn({ method: "POST" }).handler(async () => {
   const { logoutCurrentSession } = await import("./auth.server");
   return await logoutCurrentSession();
+});
+export const getWorkspaceAccess = createServerFn().handler(async () => {
+  const { getSessionUser, getWorkspaceAccessForUser } = await import("./auth.server");
+  const user = await getSessionUser();
+  return user ? await getWorkspaceAccessForUser(user) : null;
 });
 
 export const verifyEmail = createServerFn({ method: "POST" })
