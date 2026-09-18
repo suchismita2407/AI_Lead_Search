@@ -59,7 +59,9 @@ export function buildSystemPrompt(aiInstructions?: string | null): string {
 
 /** GPT model — env-overridable, defaults to the cheap-but-capable mini. */
 export function chatModel(): string {
-  return process.env.AI_MODEL || (process.env.AI_PROVIDER === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini");
+  // Kept configurable because Groq's available catalog differs by account and
+  // changes over time. This default is available to the configured account.
+  return process.env.AI_MODEL || (process.env.AI_PROVIDER === "groq" ? "qwen/qwen3.8-27b" : "gpt-4o-mini");
 }
 
 /** True when no configured provider key is set → deterministic simulation mode. */
