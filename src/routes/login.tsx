@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { loginUser, registerUser } from "~/lib/auth";
+import { loginUser, registerUser, requestPasswordReset } from "~/lib/auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -21,6 +21,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,6 +54,13 @@ function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onForgotPassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); setBusy(true); setError(null); setNotice(null);
+    try { await requestPasswordReset({ data: { email } }); setNotice("If an account exists, a password-reset link has been sent."); setForgot(false); }
+    catch { setError("Password reset email is not available yet. Contact support or configure Resend."); }
+    finally { setBusy(false); }
   }
 
   const inputCls = "premium-input w-full rounded-xl border px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none";
@@ -105,7 +113,7 @@ function LoginPage() {
             ))}
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          {forgot ? <form onSubmit={onForgotPassword} className="space-y-4"><h2 className="text-lg font-bold text-white">Reset your password</h2><p className="text-sm text-slate-400">Enter your email and we’ll send a secure reset link.</p><input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="you@example.com" />{error ? <p role="alert" className="text-sm text-red-400">{error}</p> : null}<button disabled={busy} className="ai-button w-full rounded-xl px-3 py-3 text-sm font-bold text-white">{busy ? "Sending…" : "Send reset link"}</button><button type="button" onClick={() => setForgot(false)} className="w-full text-sm text-cyan-300 hover:text-cyan-100">Back to sign in</button></form> : <form onSubmit={onSubmit} className="space-y-4">
             {mode === "signup" && (
               <>
                 <div>
@@ -211,7 +219,8 @@ function LoginPage() {
                   ? "Sign in"
                   : "Create account"}
             </button>
-          </form>
+            {mode === "signin" ? <button type="button" onClick={() => { setForgot(true); setError(null); setNotice(null); }} className="w-full text-sm font-medium text-cyan-300 hover:text-cyan-100">Forgot password?</button> : null}
+          </form>}
         </div>
 
         <p className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
